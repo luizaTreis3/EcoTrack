@@ -1,15 +1,25 @@
-import { View, Text, TextInput, Pressable, StyleSheet, Image } from "react-native";
+import { useWindowDimensions } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, Image, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function RedefinirSenha({ setScreen }) {
+  const { width } = useWindowDimensions();
+  const lockSize = Math.min(Math.max(width - 80, 180), 250);
+
   return (
 
     <View style={styles.container}>
         
       <View style={styles.header}>
 
-        <Pressable onPress={() => setScreen("RecuperarAcesso")} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={26} color="#22c55e" />
+        <Pressable
+          onPress={() => setScreen("RecuperarAcesso")}
+          style={styles.backButton}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar para recuperar acesso"
+          >
+          <Ionicons name="chevron-back" size={26} color="#22c55e" />
         </Pressable>
 
           <Text style={styles.tituloCabecalho}>
@@ -17,10 +27,14 @@ export default function RedefinirSenha({ setScreen }) {
           </Text>
       </View>
 
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
         <View style={styles.cadeado}>
             <Image
                 source={require("../assets/image/cadeadoVerificacao.png")}
-                style={styles.imagemCadeado}
+              style={[styles.imagemCadeado, { width: lockSize, height: lockSize }]}
                 resizeMode="contain"
             />
         </View>
@@ -82,12 +96,13 @@ export default function RedefinirSenha({ setScreen }) {
             Fale com nosso{" "}
             <Pressable 
                 onPress={() => setScreen("Login")}
-                style={styles.linkSuporte}>    
-                suporte
+              >
+              <Text style={styles.linkSuporte}>suporte</Text>
             </Pressable>
         </Text>
 
       </View>
+      </ScrollView>
     </View>
   );
 }
@@ -95,7 +110,7 @@ export default function RedefinirSenha({ setScreen }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f0f",
+    backgroundColor: "#161515",
   },
 
   inputContainer: {
@@ -149,7 +164,7 @@ const styles = StyleSheet.create({
 
   tituloCabecalho: {
     fontWeight: "bold",
-    fontSize: 25,
+    fontSize: 22,
     color: "#e5e5e5",
   },
 
@@ -159,12 +174,26 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
 
+  header: {
+    width: "100%",
+    paddingTop: 45,
+    paddingBottom: 15,
+    marginBottom: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    position: "relative",
+  },
+
   button: {
     backgroundColor: "#22c55e",
-    padding: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 10,
     width: "100%",
+    minHeight: 48,
     alignItems: "center",
+    justifyContent: "center",
     marginTop: 40,
   },
 
@@ -173,34 +202,31 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  header: {
-    width: "100%",
-    paddingTop: 75,
-    paddingBottom: 15,
-    marginBottom: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 25,
-    position: "relative",
-  },
-
   backButton: {
     position: "absolute",
-    left: 25,
+    top: 38,
+    left: 20,
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    elevation: 10,
   },
 
   form: {
-    flex: 1,
-    justifyContent: "center",
+    alignSelf: "center",
     alignItems: "center",
-    padding: 30,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
     width: "100%",
+    maxWidth: 560,
   },
 
   titulo: {
     textAlign: "center",
     color: "#e5e5e5",
-    fontSize: 40,
+    fontSize: 32,
     fontWeight: "bold",
     marginBottom: 30,
   },
@@ -210,19 +236,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#a0a0a0",
     lineHeight: 20,
-    paddingBottom: 50,
+    paddingBottom: 25,
   },
 
   cadeado: {
-    marginBottom: -100,
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 12,
+    marginTop: 8,
+    marginBottom: 4,
   },
 
   imagemCadeado: {
-    width: 220,
-    height: 220,
+    alignSelf: "center",
+  },
+
+  scrollContent: {
+    alignItems: "center",
+    paddingBottom: 20,
   },
 
   lembrou: {

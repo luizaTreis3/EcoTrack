@@ -1,31 +1,39 @@
-import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function Cadastro({ setScreen }) {
+  function handleCadastro() {
+    setScreen("Login");
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => setScreen("Login")}>
-          <Ionicons name="arrow-back" size={26} color="#22c55e" />
+        <Pressable
+          onPress={() => setScreen("Login")}
+          hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Voltar para o login"
+          style={styles.backButton}
+        >
+          <Ionicons name="chevron-back" size={26} color="#22c55e" />
         </Pressable>
 
-          <Text style={{ fontWeight: "bold", fontSize: 25, color: "#e5e5e5" }}>
-            Cadastro
-          </Text>
+        <Text style={styles.headerText}>Cadastro</Text>
 
-
-        <Ionicons name="menu" size={26} color="#22c55e" />
+        <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.form}>
+      <ScrollView
+        contentContainerStyle={styles.form}
+        keyboardShouldPersistTaps="handled"
+      >
         <TextInput style={styles.input} placeholder="Nome Completo*" placeholderTextColor="#fff" />
         <TextInput style={styles.input} placeholder="E-mail" placeholderTextColor="#fff" />
-        <TextInput style={styles.input} placeholder="CPF*" placeholderTextColor="#fff" />
         <TextInput style={styles.input} placeholder="CEP*" placeholderTextColor="#fff" />
-        <TextInput style={styles.input} placeholder="Logradouro" placeholderTextColor="#fff" />
-        <TextInput style={styles.input} placeholder="Bairro" placeholderTextColor="#fff" />
-        <TextInput style={styles.input} placeholder="Cidade" placeholderTextColor="#fff" />
-        <TextInput style={styles.input} placeholder="UF" placeholderTextColor="#fff" />
+        <TextInput style={styles.input} placeholder="Endereço" placeholderTextColor="#fff" />
+        <TextInput style={styles.input} placeholder="Telefone*" placeholderTextColor="#fff" />
+        <TextInput style={styles.input} placeholder="CPF*" placeholderTextColor="#fff" />
         <TextInput style={styles.input} placeholder="Senha*" placeholderTextColor="#fff" secureTextEntry />
         <TextInput style={styles.input} placeholder="Confirmar senha*" placeholderTextColor="#fff" secureTextEntry />
 
@@ -37,10 +45,16 @@ export default function Cadastro({ setScreen }) {
         </Text>
 
         <Text style={styles.checkbox}>
-          ☐ Deseja receber notificações?
+          ☑ Deseja receber notificações?
         </Text>
 
-        <Pressable style={styles.button}>
+        <Pressable
+          onPress={handleCadastro}
+          style={styles.button}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Confirmar cadastro"
+        >
           <Text style={styles.buttonText}>➜ Confirmar cadastro</Text>
         </Pressable>
 
@@ -49,13 +63,13 @@ export default function Cadastro({ setScreen }) {
 
           <Pressable 
             onPress={() => setScreen("Login")}
-          style={{ color: "#22c55e", fontWeight: "bold", textDecorationLine: "underline" }}>
-            Fazer Login
+          >
+            <Text style={styles.linkLogin}>Fazer Login</Text>
           </Pressable>
 
         </Text>
 
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -63,7 +77,7 @@ export default function Cadastro({ setScreen }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f0f",
+    backgroundColor: "#161515",
   },
 
   top: {
@@ -87,15 +101,6 @@ const styles = StyleSheet.create({
     color: "#e5e5e5",
   },
 
-  button: {
-    backgroundColor: "#22c55e",
-    padding: 10,
-    borderRadius: 10,
-    width: "100%",
-    alignItems: "center",
-    marginTop: 40,
-  },
-
   buttonText: {
     color: "#000000",
     fontWeight: "bold",
@@ -107,37 +112,67 @@ const styles = StyleSheet.create({
     marginTop: 30,
   },
 
+  linkLogin: {
+    color: "#22c55e",
+    fontWeight: "bold",
+    textDecorationLine: "underline",
+  },
+
   header: {
     width: "100%",
-    paddingTop: 75,
+    paddingTop: 45,
     paddingBottom: 15,
-    marginBottom: 20,
-    justifyContent: "space-between",
+    marginBottom: 5,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 25,
-},
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+  },
 
-headerText: {
+  backButton: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  headerSpacer: {
+    width: 32,
+    height: 32,
+  },
+
+  headerText: {
     color: "#e5e5e5",
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
-},
+    textAlign: "center",
+    flex: 1,
+  },
 
-form: {
-  flex: 1,
-  justifyContent: "center",
-  alignItems: "center",
-  padding: 30,
-  width: "100%",
-},
+  form: {
+    alignItems: "center",
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 30,
+    width: "100%",
+    maxWidth: 560,
+  },
 
-checkbox: {
-  textAlign: "left",
-  paddingLeft: 50,
-  color: "#e5e5e5",
-  width: "100%",
-}
+  checkbox: {
+    textAlign: "left",
+    color: "#e5e5e5",
+    width: "100%",
+    marginBottom: 10,
+  },
 
-},
-);
+  button: {
+    backgroundColor: "#22c55e",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    width: "100%",
+    alignItems: "center",
+    marginTop: 24,
+  },
+});
