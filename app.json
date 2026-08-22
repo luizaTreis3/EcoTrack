@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "EcoTrack",
+    "slug": "ecotrack",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/image/logoEcoTrackPreto.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/image/logoEcoTrackPreto.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/image/logoEcoTrackPreto.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/image/logoEcoTrackPreto.png"
+    }
+  }
+}
