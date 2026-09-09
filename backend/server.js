@@ -365,6 +365,464 @@ app.put("/notificacoes/:id/ler", (req, res) => {
     });
 });
 
+app.get("/pontos-coleta", (req, res) => {
+    const sql = `
+        SELECT
+            id_ponto,
+            nome,
+            endereco,
+            cep,
+            latitude,
+            longitude,
+            tipo_residuo,
+            descricao,
+            horario_funcionamento,
+            telefone
+        FROM pontos_coleta
+        ORDER BY nome
+    `;
+
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error("Erro ao buscar pontos de coleta:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao buscar pontos de coleta."
+            });
+        }
+
+        res.status(200).json({
+            pontos: results
+        });
+    });
+});
+
+app.get("/pontos-coleta/:id", (req, res) => {
+    const { id } = req.params;
+
+    const sql = `
+        SELECT
+            id_ponto,
+            nome,
+            endereco,
+            cep,
+            latitude,
+            longitude,
+            tipo_residuo,
+            descricao,
+            horario_funcionamento,
+            telefone
+        FROM pontos_coleta
+        WHERE id_ponto = ?
+    `;
+
+    db.query(sql, [id], (err, results) => {
+        if (err) {
+            console.error("Erro ao buscar ponto de coleta:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao buscar ponto de coleta."
+            });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                mensagem: "Ponto de coleta não encontrado."
+            });
+        }
+
+        res.status(200).json({
+            ponto: results[0]
+        });
+    });
+});
+
+app.post("/pontos-coleta", (req, res) => {
+    const {
+        nome,
+        endereco,
+        cep,
+        latitude,
+        longitude,
+        tipo_residuo,
+        descricao,
+        horario_funcionamento,
+        telefone
+    } = req.body;
+
+    // Verifica os campos obrigatórios
+    if (!nome || !endereco || !tipo_residuo) {
+        return res.status(400).json({
+            mensagem: "Preencha os campos obrigatórios: nome, endereço e tipo de resíduo."
+        });
+    }
+
+    const sql = `
+        INSERT INTO pontos_coleta
+        (
+            nome,
+            endereco,
+            cep,
+            latitude,
+            longitude,
+            tipo_residuo,
+            descricao,
+            horario_funcionamento,
+            telefone
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const valores = [
+        nome,
+        endereco,
+        cep,
+        latitude,
+        longitude,
+        tipo_residuo,
+        descricao,
+        horario_funcionamento,
+        telefone
+    ];
+
+    db.query(sql, valores, (err, result) => {
+        if (err) {
+            console.error("Erro ao cadastrar ponto de coleta:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao cadastrar ponto de coleta."
+            });
+        }
+
+        res.status(201).json({
+            mensagem: "Ponto de coleta cadastrado com sucesso!",
+            id_ponto: result.insertId
+        });
+    });
+});
+
+app.put("/pontos-coleta/:id", (req, res) => {
+    const { id } = req.params;
+
+    const {
+        nome,
+        endereco,
+        cep,
+        latitude,
+        longitude,
+        tipo_residuo,
+        descricao,
+        horario_funcionamento,
+        telefone
+    } = req.body;
+
+    // Verifica os campos obrigatórios
+    if (!nome || !endereco || !tipo_residuo) {
+        return res.status(400).json({
+            mensagem: "Preencha os campos obrigatórios: nome, endereço e tipo de resíduo."
+        });
+    }
+
+    const sql = `
+        UPDATE pontos_coleta
+        SET
+            nome = ?,
+            endereco = ?,
+            cep = ?,
+            latitude = ?,
+            longitude = ?,
+            tipo_residuo = ?,
+            descricao = ?,
+            horario_funcionamento = ?,
+            telefone = ?
+        WHERE id_ponto = ?
+    `;
+
+    const valores = [
+        nome,
+        endereco,
+        cep,
+        latitude,
+        longitude,
+        tipo_residuo,
+        descricao,
+        horario_funcionamento,
+        telefone,
+        id
+    ];
+
+    db.query(sql, valores, (err, result) => {
+        if (err) {
+            console.error("Erro ao atualizar ponto de coleta:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao atualizar ponto de coleta."
+            });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                mensagem: "Ponto de coleta não encontrado."
+            });
+        }
+
+        res.status(200).json({
+            mensagem: "Ponto de coleta atualizado com sucesso!"
+        });
+    });
+});
+
+app.delete("/pontos-coleta/:id", (req, res) => {
+    const { id } = req.params;
+
+    const sql = `
+        DELETE FROM pontos_coleta
+        WHERE id_ponto = ?
+    `;
+
+    db.query(sql, [id], (err, result) => {
+        if (err) {
+            console.error("Erro ao excluir ponto de coleta:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao excluir ponto de coleta."
+            });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                mensagem: "Ponto de coleta não encontrado."
+            });
+        }
+
+        res.status(200).json({
+            mensagem: "Ponto de coleta excluído com sucesso!"
+        });
+    });
+});
+
+app.get("/relatos", (req, res) => {
+    const sql = `
+        SELECT
+            id_relato,
+            titulo,
+            bairro,
+            endereco,
+            categoria,
+            descricao,
+            imagem,
+            atualizar_status,
+            data_criacao
+        FROM relatos
+        ORDER BY data_criacao DESC
+    `;
+
+    db.query(sql, (err, results) => {
+        if (err) {
+            console.error("Erro ao buscar relatos:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao buscar relatos."
+            });
+        }
+
+        res.status(200).json({
+            relatos: results
+        });
+    });
+});
+
+app.get("/relatos/:id", (req, res) => {
+    const { id } = req.params;
+
+    const sql = `
+        SELECT
+            id_relato,
+            titulo,
+            bairro,
+            endereco,
+            categoria,
+            descricao,
+            imagem,
+            atualizar_status,
+            data_criacao
+        FROM relatos
+        WHERE id_relato = ?
+    `;
+
+    db.query(sql, [id], (err, results) => {
+        if (err) {
+            console.error("Erro ao buscar relato:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao buscar relato."
+            });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                mensagem: "Relato não encontrado."
+            });
+        }
+
+        res.status(200).json({
+            relato: results[0]
+        });
+    });
+});
+
+app.post("/relatos", (req, res) => {
+    const {
+        titulo,
+        bairro,
+        endereco,
+        categoria,
+        descricao,
+        imagem,
+        atualizar_status
+    } = req.body;
+
+    // Verifica os campos obrigatórios
+    if (!titulo || !bairro || !endereco || !categoria || !descricao) {
+        return res.status(400).json({
+            mensagem: "Preencha os campos obrigatórios: título, bairro, endereço, categoria e descrição."
+        });
+    }
+
+    const sql = `
+        INSERT INTO relatos
+        (
+            titulo,
+            bairro,
+            endereco,
+            categoria,
+            descricao,
+            imagem,
+            atualizar_status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const valores = [
+        titulo,
+        bairro,
+        endereco,
+        categoria,
+        descricao,
+        imagem || null,
+        atualizar_status || false
+    ];
+
+    db.query(sql, valores, (err, result) => {
+        if (err) {
+            console.error("Erro ao cadastrar relato:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao cadastrar relato."
+            });
+        }
+
+        res.status(201).json({
+            mensagem: "Relato cadastrado com sucesso!",
+            id_relato: result.insertId
+        });
+    });
+});
+
+app.put("/relatos/:id", (req, res) => {
+    const { id } = req.params;
+
+    const {
+        titulo,
+        bairro,
+        endereco,
+        categoria,
+        descricao,
+        imagem,
+        atualizar_status
+    } = req.body;
+
+    // Verifica os campos obrigatórios
+    if (!titulo || !bairro || !endereco || !categoria || !descricao) {
+        return res.status(400).json({
+            mensagem: "Preencha os campos obrigatórios: título, bairro, endereço, categoria e descrição."
+        });
+    }
+
+    const sql = `
+        UPDATE relatos
+        SET
+            titulo = ?,
+            bairro = ?,
+            endereco = ?,
+            categoria = ?,
+            descricao = ?,
+            imagem = ?,
+            atualizar_status = ?
+        WHERE id_relato = ?
+    `;
+
+    const valores = [
+        titulo,
+        bairro,
+        endereco,
+        categoria,
+        descricao,
+        imagem || null,
+        atualizar_status || false,
+        id
+    ];
+
+    db.query(sql, valores, (err, result) => {
+        if (err) {
+            console.error("Erro ao atualizar relato:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao atualizar relato."
+            });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                mensagem: "Relato não encontrado."
+            });
+        }
+
+        res.status(200).json({
+            mensagem: "Relato atualizado com sucesso!"
+        });
+    });
+});
+
+app.delete("/relatos/:id", (req, res) => {
+    const { id } = req.params;
+
+    const sql = `
+        DELETE FROM relatos
+        WHERE id_relato = ?
+    `;
+
+    db.query(sql, [id], (err, result) => {
+        if (err) {
+            console.error("Erro ao excluir relato:", err);
+
+            return res.status(500).json({
+                mensagem: "Erro ao excluir relato."
+            });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                mensagem: "Relato não encontrado."
+            });
+        }
+
+        res.status(200).json({
+            mensagem: "Relato excluído com sucesso!"
+        });
+    });
+});
+
 app.listen(port, () => {
     console.log(`Servidor backend executando na porta ${port}`);
 });

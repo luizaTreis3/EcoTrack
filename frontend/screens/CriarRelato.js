@@ -1,10 +1,30 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, Image, ScrollView, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Alert,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
 
 export default function CriarRelato({ setScreen }) {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Estados dos campos
+  const [titulo, setTitulo] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [atualizarStatus, setAtualizarStatus] = useState(false);
+
+  const [carregando, setCarregando] = useState(false);
+
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
@@ -13,10 +33,81 @@ export default function CriarRelato({ setScreen }) {
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
 
+  async function handleCriarRelato() {
+    // Verifica os campos obrigatórios
+    if (!titulo || !bairro || !endereco || !categoria || !descricao) {
+      Alert.alert(
+        "Atenção",
+        "Preencha todos os campos obrigatórios."
+      );
+      return;
+    }
+
+    setCarregando(true);
+
+    try {
+      const response = await fetch(
+        "http://192.168.1.21:3000/relatos",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            titulo: titulo.trim(),
+            bairro: bairro.trim(),
+            endereco: endereco.trim(),
+            categoria: categoria.trim(),
+            descricao: descricao.trim(),
+            imagem: null,
+            atualizar_status: atualizarStatus,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert(
+          "Erro",
+          data.mensagem || "Não foi possível criar o relato."
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Sucesso!",
+        "Relato criado com sucesso!"
+      );
+
+      // Limpa os campos depois de criar
+      setTitulo("");
+      setBairro("");
+      setEndereco("");
+      setCategoria("");
+      setDescricao("");
+      setAtualizarStatus(false);
+
+    } catch (error) {
+      console.error("Erro ao criar relato:", error);
+
+      Alert.alert(
+        "Erro de conexão",
+        "Não foi possível conectar ao servidor."
+      );
+    } finally {
+      setCarregando(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
+
       {menuOpen && (
-        <Pressable style={styles.menuOverlay} onPress={() => setMenuOpen(false)}>
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setMenuOpen(false)}
+        >
           <View style={styles.menuSheet}>
             {menuItems.map((item) => (
               <Pressable
@@ -27,8 +118,15 @@ export default function CriarRelato({ setScreen }) {
                   setScreen(item.screen);
                 }}
               >
-                <Ionicons name={item.icon} size={18} color="#22c55e" />
-                <Text style={styles.menuItemText}>{item.label}</Text>
+                <Ionicons
+                  name={item.icon}
+                  size={18}
+                  color="#22c55e"
+                />
+
+                <Text style={styles.menuItemText}>
+                  {item.label}
+                </Text>
               </Pressable>
             ))}
           </View>
@@ -36,35 +134,66 @@ export default function CriarRelato({ setScreen }) {
       )}
 
       <View style={styles.header}>
+
         <Pressable
           onPress={() => setScreen("Login")}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Voltar para o login"
         >
-          <Ionicons name="chevron-back" size={26} color="#22c55e" /> 
+          <Ionicons
+            name="chevron-back"
+            size={26}
+            color="#22c55e"
+          />
         </Pressable>
 
-        <Text style={{ fontWeight: "bold", fontSize: 20, color: "#e5e5e5" }}>
+        <Text
+          style={{
+            fontWeight: "bold",
+            fontSize: 20,
+            color: "#e5e5e5",
+          }}
+        >
           Crie um relato
         </Text>
 
-        <Pressable onPress={() => setMenuOpen((prev) => !prev)} hitSlop={12} style={styles.menuButton}>
-          <Ionicons name="menu" size={26} color="#22c55e" />
+        <Pressable
+          onPress={() => setMenuOpen((prev) => !prev)}
+          hitSlop={12}
+          style={styles.menuButton}
+        >
+          <Ionicons
+            name="menu"
+            size={26}
+            color="#22c55e"
+          />
         </Pressable>
+
       </View>
 
       <ScrollView
         contentContainerStyle={styles.form}
         keyboardShouldPersistTaps="handled"
       >
+
+        {/* TÍTULO */}
         <View style={styles.row}>
+
           <TextInput
-            style={[styles.input, { flex: 1, marginRight: 12 }]}
+            style={[
+              styles.input,
+              {
+                flex: 1,
+                marginRight: 12,
+              },
+            ]}
             placeholder="Título*"
             placeholderTextColor="#8a8a8a"
+            value={titulo}
+            onChangeText={setTitulo}
           />
-        
+
           <Pressable style={styles.uploadBox}>
             <Image
               source={require("../assets/image/upload.png")}
@@ -72,51 +201,117 @@ export default function CriarRelato({ setScreen }) {
               resizeMode="contain"
             />
           </Pressable>
+
         </View>
 
+        {/* BAIRRO */}
         <TextInput
           style={styles.input}
           placeholder="Bairro*"
           placeholderTextColor="#8a8a8a"
+          value={bairro}
+          onChangeText={setBairro}
         />
 
+        {/* ENDEREÇO */}
         <TextInput
           style={styles.input}
           placeholder="Endereço*"
           placeholderTextColor="#8a8a8a"
+          value={endereco}
+          onChangeText={setEndereco}
         />
 
+        {/* CATEGORIA */}
         <View style={styles.inputWithIcon}>
-          <Ionicons name="funnel-outline" size={18} color="#22c55e" style={{ marginRight: 8 }} />
+
+          <Ionicons
+            name="funnel-outline"
+            size={18}
+            color="#22c55e"
+            style={{ marginRight: 8 }}
+          />
+
           <TextInput
             style={styles.inputInline}
             placeholder="Categoria*"
             placeholderTextColor="#8a8a8a"
+            value={categoria}
+            onChangeText={setCategoria}
           />
+
         </View>
 
+        {/* DESCRIÇÃO */}
         <TextInput
-          style={[styles.input, styles.textArea]}
+          style={[
+            styles.input,
+            styles.textArea,
+          ]}
           placeholder="Descrição*"
           placeholderTextColor="#8a8a8a"
           multiline
           numberOfLines={4}
           textAlignVertical="top"
+          value={descricao}
+          onChangeText={setDescricao}
         />
 
-        <Text style={styles.checkbox}>
-            ☑ {" "}
-          <Text style={{ color: "#22c55e", fontWeight: "bold", textDecorationLine: "underline" }}>
-             Mantenha-me atualizado sobre o status do relato.
-          </Text>
-        </Text>
+        {/* CHECKBOX */}
+        <Pressable
+          onPress={() =>
+            setAtualizarStatus((prev) => !prev)
+          }
+        >
+          <Text style={styles.checkbox}>
 
-        <Pressable style={styles.button}>
-          <Ionicons name="arrow-forward" size={18} color="#000" style={{ marginRight: 8 }} />
-          <Text style={styles.buttonText}>Criar relato</Text>
+            {atualizarStatus ? "☑" : "☐"}{" "}
+
+            <Text
+              style={{
+                color: "#22c55e",
+                fontWeight: "bold",
+                textDecorationLine: "underline",
+              }}
+            >
+              Mantenha-me atualizado sobre o status do relato.
+            </Text>
+
+          </Text>
         </Pressable>
+
+        {/* BOTÃO */}
+        <Pressable
+          style={[
+            styles.button,
+            carregando && { opacity: 0.6 },
+          ]}
+          onPress={handleCriarRelato}
+          disabled={carregando}
+        >
+
+          <Ionicons
+            name="arrow-forward"
+            size={18}
+            color="#000"
+            style={{ marginRight: 8 }}
+          />
+
+          <Text style={styles.buttonText}>
+            {carregando
+              ? "Criando..."
+              : "Criar relato"}
+          </Text>
+
+        </Pressable>
+
       </ScrollView>
-      <TabBar active="CriarRelato" setScreen={setScreen} />
+
+      <TabBar
+        active="CriarRelato"
+        setScreen={setScreen}
+      />
+
     </View>
   );
 }
