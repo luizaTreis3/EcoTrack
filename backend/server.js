@@ -9,6 +9,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+
 app.post("/usuarios", async (req, res) => {
     const {
         nome_completo,
@@ -96,10 +97,10 @@ app.post("/usuarios", async (req, res) => {
     }
 });
 
+
 app.post("/login", async (req, res) => {
     const { email, senha } = req.body;
 
-    // Verifica se os campos foram preenchidos
     if (!email || !senha) {
         return res.status(400).json({
             mensagem: "Informe o e-mail e a senha."
@@ -117,7 +118,6 @@ app.post("/login", async (req, res) => {
             });
         }
 
-        // Usuário não encontrado
         if (results.length === 0) {
             return res.status(401).json({
                 mensagem: "E-mail ou senha inválidos."
@@ -127,7 +127,6 @@ app.post("/login", async (req, res) => {
         const usuario = results[0];
 
         try {
-            // Compara a senha digitada com o hash salvo no banco
             const senhaValida = await bcrypt.compare(
                 senha,
                 usuario.senha
@@ -139,7 +138,6 @@ app.post("/login", async (req, res) => {
                 });
             }
 
-            // Login realizado
             res.status(200).json({
                 mensagem: "Login realizado com sucesso!",
                 usuario: {
@@ -158,6 +156,7 @@ app.post("/login", async (req, res) => {
         }
     });
 });
+
 
 app.get("/usuarios/:id", (req, res) => {
     const { id } = req.params;
@@ -198,6 +197,7 @@ app.get("/usuarios/:id", (req, res) => {
         });
     });
 });
+
 
 app.put("/usuarios/:id", (req, res) => {
     const { id } = req.params;
@@ -278,6 +278,7 @@ app.put("/usuarios/:id", (req, res) => {
     });
 });
 
+
 app.delete("/usuarios/:id", (req, res) => {
     const { id } = req.params;
 
@@ -334,6 +335,7 @@ app.get("/notificacoes/:id_usuario", (req, res) => {
         });
     });
 });
+
 
 app.put("/notificacoes/:id/ler", (req, res) => {
     const { id } = req.params;
@@ -397,6 +399,7 @@ app.get("/pontos-coleta", (req, res) => {
     });
 });
 
+
 app.get("/pontos-coleta/:id", (req, res) => {
     const { id } = req.params;
 
@@ -437,6 +440,7 @@ app.get("/pontos-coleta/:id", (req, res) => {
     });
 });
 
+
 app.post("/pontos-coleta", (req, res) => {
     const {
         nome,
@@ -450,7 +454,6 @@ app.post("/pontos-coleta", (req, res) => {
         telefone
     } = req.body;
 
-    // Verifica os campos obrigatórios
     if (!nome || !endereco || !tipo_residuo) {
         return res.status(400).json({
             mensagem: "Preencha os campos obrigatórios: nome, endereço e tipo de resíduo."
@@ -501,6 +504,7 @@ app.post("/pontos-coleta", (req, res) => {
     });
 });
 
+
 app.put("/pontos-coleta/:id", (req, res) => {
     const { id } = req.params;
 
@@ -516,7 +520,6 @@ app.put("/pontos-coleta/:id", (req, res) => {
         telefone
     } = req.body;
 
-    // Verifica os campos obrigatórios
     if (!nome || !endereco || !tipo_residuo) {
         return res.status(400).json({
             mensagem: "Preencha os campos obrigatórios: nome, endereço e tipo de resíduo."
@@ -572,6 +575,7 @@ app.put("/pontos-coleta/:id", (req, res) => {
     });
 });
 
+
 app.delete("/pontos-coleta/:id", (req, res) => {
     const { id } = req.params;
 
@@ -601,10 +605,12 @@ app.delete("/pontos-coleta/:id", (req, res) => {
     });
 });
 
+// BUSCAR TODOS OS RELATOS
 app.get("/relatos", (req, res) => {
     const sql = `
         SELECT
             id_relato,
+            id_usuario,
             titulo,
             bairro,
             endereco,
@@ -632,12 +638,15 @@ app.get("/relatos", (req, res) => {
     });
 });
 
+
+// BUSCAR UM RELATO
 app.get("/relatos/:id", (req, res) => {
     const { id } = req.params;
 
     const sql = `
         SELECT
             id_relato,
+            id_usuario,
             titulo,
             bairro,
             endereco,
@@ -673,6 +682,7 @@ app.get("/relatos/:id", (req, res) => {
 
 app.post("/relatos", (req, res) => {
     const {
+        id_usuario,
         titulo,
         bairro,
         endereco,
@@ -681,6 +691,13 @@ app.post("/relatos", (req, res) => {
         imagem,
         atualizar_status
     } = req.body;
+
+    // Verifica o ID do usuário
+    if (!id_usuario) {
+        return res.status(400).json({
+            mensagem: "Usuário não identificado."
+        });
+    }
 
     // Verifica os campos obrigatórios
     if (!titulo || !bairro || !endereco || !categoria || !descricao) {
@@ -692,6 +709,7 @@ app.post("/relatos", (req, res) => {
     const sql = `
         INSERT INTO relatos
         (
+            id_usuario,
             titulo,
             bairro,
             endereco,
@@ -700,10 +718,11 @@ app.post("/relatos", (req, res) => {
             imagem,
             atualizar_status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const valores = [
+        id_usuario,
         titulo,
         bairro,
         endereco,
@@ -717,6 +736,13 @@ app.post("/relatos", (req, res) => {
         if (err) {
             console.error("Erro ao cadastrar relato:", err);
 
+            // Usuário não existe na tabela usuarios
+            if (err.code === "ER_NO_REFERENCED_ROW_2") {
+                return res.status(400).json({
+                    mensagem: "O usuário informado não existe."
+                });
+            }
+
             return res.status(500).json({
                 mensagem: "Erro ao cadastrar relato."
             });
@@ -724,7 +750,8 @@ app.post("/relatos", (req, res) => {
 
         res.status(201).json({
             mensagem: "Relato cadastrado com sucesso!",
-            id_relato: result.insertId
+            id_relato: result.insertId,
+            id_usuario: id_usuario
         });
     });
 });
@@ -742,7 +769,6 @@ app.put("/relatos/:id", (req, res) => {
         atualizar_status
     } = req.body;
 
-    // Verifica os campos obrigatórios
     if (!titulo || !bairro || !endereco || !categoria || !descricao) {
         return res.status(400).json({
             mensagem: "Preencha os campos obrigatórios: título, bairro, endereço, categoria e descrição."

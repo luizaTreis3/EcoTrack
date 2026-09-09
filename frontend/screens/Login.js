@@ -11,7 +11,7 @@ import {
 
 import { useState } from "react";
 
-export default function Login({ setScreen }) {
+export default function Login({ setScreen, setUsuario }) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [carregando, setCarregando] = useState(false);
@@ -39,9 +39,15 @@ export default function Login({ setScreen }) {
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert("Erro", data.mensagem || "E-mail ou senha inválidos.");
+        Alert.alert(
+          "Erro",
+          data.mensagem || "E-mail ou senha inválidos."
+        );
         return;
       }
+
+      // Guarda os dados do usuário que acabou de fazer login
+      setUsuario(data.usuario);
 
       Alert.alert("Sucesso", data.mensagem);
 

@@ -12,7 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
 
-export default function CriarRelato({ setScreen }) {
+export default function CriarRelato({ setScreen, usuario }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Estados dos campos
@@ -34,6 +34,15 @@ export default function CriarRelato({ setScreen }) {
   ];
 
   async function handleCriarRelato() {
+    // Verifica se existe usuário logado
+    if (!usuario || !usuario.id_usuario) {
+      Alert.alert(
+        "Erro",
+        "Não foi possível identificar o usuário logado."
+      );
+      return;
+    }
+
     // Verifica os campos obrigatórios
     if (!titulo || !bairro || !endereco || !categoria || !descricao) {
       Alert.alert(
@@ -53,7 +62,11 @@ export default function CriarRelato({ setScreen }) {
           headers: {
             "Content-Type": "application/json",
           },
+
           body: JSON.stringify({
+            // ID do usuário que criou o relato
+            id_usuario: usuario.id_usuario,
+
             titulo: titulo.trim(),
             bairro: bairro.trim(),
             endereco: endereco.trim(),
@@ -95,6 +108,7 @@ export default function CriarRelato({ setScreen }) {
         "Erro de conexão",
         "Não foi possível conectar ao servidor."
       );
+
     } finally {
       setCarregando(false);
     }

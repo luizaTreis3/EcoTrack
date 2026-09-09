@@ -2,7 +2,7 @@ import { useState } from "react";
 import Login from "./Login";
 import Cadastro from "./Cadastro";
 import RecuperarAcesso from "./RecuperarAcesso";
-import RedefinirSenha from './RedefinirSenha';
+import RedefinirSenha from "./RedefinirSenha";
 import CriarRelato from "./CriarRelato";
 import Home from "./Home";
 import MeuPerfil from "./MeuPerfil";
@@ -14,8 +14,16 @@ import RegistrarReciclagem from "./RegistrarReciclagem";
 export default function App() {
   const [screen, setScreen] = useState("Login");
 
+  // Guarda os dados do usuário que está logado
+  const [usuario, setUsuario] = useState(null);
+
   if (screen === "Login") {
-    return <Login setScreen={setScreen} />;
+    return (
+      <Login
+        setScreen={setScreen}
+        setUsuario={setUsuario}
+      />
+    );
   }
 
   if (screen === "Cadastro") {
@@ -31,7 +39,12 @@ export default function App() {
   }
 
   if (screen === "CriarRelato") {
-    return <CriarRelato setScreen={setScreen} />;
+    return (
+      <CriarRelato
+        setScreen={setScreen}
+        usuario={usuario}
+      />
+    );
   }
 
   if (screen === "RegistrarReciclagem") {
@@ -55,8 +68,13 @@ export default function App() {
   }
 
   if (screen.startsWith("Perfil:")) {
-    return <PerfilConfiguracao type={screen.slice(7)} setScreen={setScreen} />;
+    return (
+      <PerfilConfiguracao
+        type={screen.slice(7)}
+        setScreen={setScreen}
+      />
+    );
   }
 
-  return <Login setScreen={setScreen} />;
+  return <Login setScreen={setScreen} setUsuario={setUsuario} />;
 }
