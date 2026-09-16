@@ -1,6 +1,24 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Alert } from "react-native";
+
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Alert,
+} from "react-native";
+
 import { Ionicons } from "@expo/vector-icons";
+
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  signOut,
+} from "firebase/auth";
+
+import { auth } from "../src/services/firebaseConfig";
 
 export default function Cadastro({ setScreen }) {
   const [nome, setNome] = useState("");
@@ -55,61 +73,175 @@ export default function Cadastro({ setScreen }) {
 
     setCarregando(true);
 
+    let usuarioFirebase = null;
+
     try {
       /*
-       * Se estiver usando:
-       * - Android Emulator: http://10.0.2.2:3000
-       * - iOS Simulator: http://localhost:3000
-       * - Celular físico: IP do computador na rede.
-       * Exemplo:
-       * http://192.168.0.10:3000
+       * PRIMEIRO:
+       * Cria o usuário no Firebase Authentication.
        */
+      const userCredential =
+        await createUserWithEmailAndPassword(
+          auth,
+          email.trim(),
+          senha
+        );
 
-      const response = await fetch("http://192.168.1.21:3000/usuarios", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          nome_completo: nome.trim(),
-          email: email.trim(),
-          cep: cep.trim(),
-          endereco: endereco.trim(),
-          telefone: telefone.trim(),
-          cpf: cpf.trim(),
-          senha: senha,
-          aceitou_termos: aceitouTermos,
-          deseja_notificacoes: desejaNotificacoes,
-        }),
-      });
+      usuarioFirebase = userCredential.user;
+
+      console.log(
+        "Usuário criado no Firebase:",
+        usuarioFirebase.uid
+      );
+
+      /*
+       * SEGUNDO:
+       * Salva os dados completos do usuário
+       * no banco MySQL através do backend.
+       */
+      const response = await fetch(
+        "http://localhost:3000/usuarios",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            nome_completo: nome.trim(),
+            email: email.trim(),
+            cep: cep.trim(),
+            endereco: endereco.trim(),
+            telefone: telefone.trim(),
+            cpf: cpf.trim(),
+            senha: senha,
+            aceitou_termos: aceitouTermos,
+            deseja_notificacoes: desejaNotificacoes,
+          }),
+        }
+      );
 
       const data = await response.json();
 
+      console.log(
+        "STATUS DO BACKEND:",
+        response.status
+      );
+
+      console.log(
+        "RESPOSTA DO BACKEND:",
+        data
+      );
+
+      /*
+       * Se o backend não conseguiu salvar,
+       * remove também o usuário criado no Firebase.
+       */
       if (!response.ok) {
+        try {
+          if (usuarioFirebase) {
+            await deleteUser(usuarioFirebase);
+          }
+        } catch (deleteError) {
+          console.error(
+            "Erro ao remover usuário do Firebase:",
+            deleteError
+          );
+        }
+
         Alert.alert(
           "Erro",
-          data.mensagem || "Não foi possível realizar o cadastro."
+          data.mensagem ||
+            "Não foi possível salvar os dados do usuário."
         );
+
         return;
       }
 
-      Alert.alert(
-        "Cadastro realizado!",
-        "Seu usuário foi cadastrado com sucesso.",
-        [
-          {
-            text: "OK",
-            onPress: () => setScreen("Login"),
-          },
-        ]
-      );
-    } catch (error) {
-      console.error("Erro ao cadastrar:", error);
+      /*
+       * O cadastro deu certo no Firebase
+       * e também no MySQL.
+       *
+       * O Firebase autentica automaticamente
+       * o usuário depois do cadastro.
+       *
+       * Como queremos que ele faça login
+       * normalmente depois de cadastrar,
+       * encerramos essa sessão.
+       */
+      await signOut(auth);
+
+      /*
+       * Cadastro concluído.
+       * Redireciona diretamente para a tela de Login.
+       */
+      setScreen("Login");
 
       Alert.alert(
-        "Erro de conexão",
-        "Não foi possível conectar ao servidor. Verifique se o backend está funcionando."
+        "Cadastro realizado!",
+        "Sua conta foi criada com sucesso."
       );
+
+    } catch (error) {
+      console.error(
+        "Erro ao cadastrar:",
+        error
+      );
+
+      let mensagem =
+        "Não foi possível realizar o cadastro.";
+
+      // Erros do Firebase Authentication
+
+      if (
+        error.code ===
+        "auth/email-already-in-use"
+      ) {
+        mensagem =
+          "Este e-mail já está cadastrado.";
+
+      } else if (
+        error.code ===
+        "auth/invalid-email"
+      ) {
+        mensagem =
+          "Digite um e-mail válido.";
+
+      } else if (
+        error.code ===
+        "auth/weak-password"
+      ) {
+        mensagem =
+          "A senha é muito fraca.";
+
+      } else if (
+        error.code ===
+        "auth/network-request-failed"
+      ) {
+        mensagem =
+          "Não foi possível conectar ao Firebase. Verifique sua internet.";
+
+      } else if (
+        error.code ===
+        "auth/operation-not-allowed"
+      ) {
+        mensagem =
+          "O cadastro por e-mail e senha não está habilitado no Firebase.";
+
+      } else if (
+        error instanceof TypeError &&
+        error.message === "Failed to fetch"
+      ) {
+        mensagem =
+          "Não foi possível conectar ao servidor. Verifique se o backend está funcionando.";
+      }
+
+      Alert.alert(
+        "Erro",
+        mensagem
+      );
+
     } finally {
       setCarregando(false);
     }
@@ -117,7 +249,9 @@ export default function Cadastro({ setScreen }) {
 
   return (
     <View style={styles.container}>
+
       <View style={styles.header}>
+
         <Pressable
           onPress={() => setScreen("Login")}
           hitSlop={12}
@@ -132,15 +266,19 @@ export default function Cadastro({ setScreen }) {
           />
         </Pressable>
 
-        <Text style={styles.headerText}>Cadastro</Text>
+        <Text style={styles.headerText}>
+          Cadastro
+        </Text>
 
         <View style={styles.headerSpacer} />
+
       </View>
 
       <ScrollView
         contentContainerStyle={styles.form}
         keyboardShouldPersistTaps="handled"
       >
+
         {/* NOME */}
         <TextInput
           style={styles.input}
@@ -224,10 +362,13 @@ export default function Cadastro({ setScreen }) {
         {/* TERMOS */}
         <Pressable
           style={styles.checkboxContainer}
-          onPress={() => setAceitouTermos(!aceitouTermos)}
+          onPress={() =>
+            setAceitouTermos(!aceitouTermos)
+          }
         >
           <Text style={styles.checkbox}>
             {aceitouTermos ? "☑" : "☐"} Aceito os{" "}
+
             <Text
               style={{
                 color: "#22c55e",
@@ -244,11 +385,14 @@ export default function Cadastro({ setScreen }) {
         <Pressable
           style={styles.checkboxContainer}
           onPress={() =>
-            setDesejaNotificacoes(!desejaNotificacoes)
+            setDesejaNotificacoes(
+              !desejaNotificacoes
+            )
           }
         >
           <Text style={styles.checkbox}>
-            {desejaNotificacoes ? "☑" : "☐"} Deseja receber notificações?
+            {desejaNotificacoes ? "☑" : "☐"} Deseja
+            receber notificações?
           </Text>
         </Pressable>
 
@@ -257,7 +401,8 @@ export default function Cadastro({ setScreen }) {
           onPress={handleCadastro}
           style={[
             styles.button,
-            carregando && styles.buttonDisabled,
+            carregando &&
+              styles.buttonDisabled,
           ]}
           hitSlop={8}
           accessibilityRole="button"
@@ -273,24 +418,31 @@ export default function Cadastro({ setScreen }) {
 
         {/* LOGIN */}
         <View style={styles.loginContainer}>
+
           <Text style={styles.cadastro}>
             Já tem uma conta?{" "}
           </Text>
 
           <Pressable
-            onPress={() => setScreen("Login")}
+            onPress={() =>
+              setScreen("Login")
+            }
           >
             <Text style={styles.linkLogin}>
               Fazer Login
             </Text>
           </Pressable>
+
         </View>
+
       </ScrollView>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
     backgroundColor: "#161515",
@@ -405,4 +557,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+
 });

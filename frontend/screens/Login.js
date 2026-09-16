@@ -1,15 +1,9 @@
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from "react-native";
+import { View, Text, TextInput, Pressable, Image, ScrollView, StyleSheet, Alert } from "react-native";
 
 import { useState } from "react";
+
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../src/services/firebaseConfig";
 
 export default function Login({ setScreen, setUsuario }) {
   const [email, setEmail] = useState("");
@@ -25,42 +19,46 @@ export default function Login({ setScreen, setUsuario }) {
     setCarregando(true);
 
     try {
-      const response = await fetch("http://192.168.1.21:3000/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          senha: senha,
-        }),
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        senha
+      );
+
+      const user = userCredential.user;
+
+      // Guarda os dados do usuário autenticado pelo Firebase
+      setUsuario({
+        uid: user.uid,
+        email: user.email,
+        emailVerified: user.emailVerified,
       });
 
-      const data = await response.json();
+      Alert.alert(
+        "Sucesso",
+        "Login realizado com sucesso!"
+      );
 
-      if (!response.ok) {
-        Alert.alert(
-          "Erro",
-          data.mensagem || "E-mail ou senha inválidos."
-        );
-        return;
-      }
-
-      // Guarda os dados do usuário que acabou de fazer login
-      setUsuario(data.usuario);
-
-      Alert.alert("Sucesso", data.mensagem);
-
-      // Login correto → vai para a Home
       setScreen("Home");
 
     } catch (error) {
       console.error("Erro ao fazer login:", error);
 
-      Alert.alert(
-        "Erro de conexão",
-        "Não foi possível conectar ao servidor."
-      );
+      let mensagem = "Não foi possível realizar o login.";
+
+      if (
+        error.code === "auth/invalid-credential" ||
+        error.code === "auth/wrong-password" ||
+        error.code === "auth/user-not-found"
+      ) {
+        mensagem = "E-mail ou senha inválidos.";
+      } else if (error.code === "auth/invalid-email") {
+        mensagem = "Digite um e-mail válido.";
+      } else if (error.code === "auth/too-many-requests") {
+        mensagem = "Muitas tentativas. Tente novamente mais tarde.";
+      }
+
+      Alert.alert("Erro", mensagem);
 
     } finally {
       setCarregando(false);

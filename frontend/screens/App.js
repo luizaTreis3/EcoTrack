@@ -1,4 +1,6 @@
 import { useState } from "react";
+import AppNavigator from "../src/navigation/AppNavigator";
+
 import Login from "./Login";
 import Cadastro from "./Cadastro";
 import RecuperarAcesso from "./RecuperarAcesso";
@@ -17,64 +19,65 @@ export default function App() {
   // Guarda os dados do usuário que está logado
   const [usuario, setUsuario] = useState(null);
 
-  if (screen === "Login") {
-    return (
-      <Login
-        setScreen={setScreen}
-        setUsuario={setUsuario}
+  return (
+    <>
+      {/* Firebase verifica se existe um usuário autenticado */}
+      <AppNavigator
+          setUsuario={setUsuario}
       />
-    );
-  }
 
-  if (screen === "Cadastro") {
-    return <Cadastro setScreen={setScreen} />;
-  }
+      {screen === "Login" && (
+        <Login
+          setScreen={setScreen}
+          setUsuario={setUsuario}
+        />
+      )}
 
-  if (screen === "RecuperarAcesso") {
-    return <RecuperarAcesso setScreen={setScreen} />;
-  }
+      {screen === "Cadastro" && (
+        <Cadastro setScreen={setScreen} />
+      )}
 
-  if (screen === "RedefinirSenha") {
-    return <RedefinirSenha setScreen={setScreen} />;
-  }
+      {screen === "RecuperarAcesso" && (
+        <RecuperarAcesso setScreen={setScreen} />
+      )}
 
-  if (screen === "CriarRelato") {
-    return (
-      <CriarRelato
-        setScreen={setScreen}
-        usuario={usuario}
-      />
-    );
-  }
+      {screen === "RedefinirSenha" && (
+        <RedefinirSenha setScreen={setScreen} />
+      )}
 
-  if (screen === "RegistrarReciclagem") {
-    return <RegistrarReciclagem setScreen={setScreen} />;
-  }
+      {screen === "CriarRelato" && (
+        <CriarRelato
+          setScreen={setScreen}
+          usuario={usuario}
+        />
+      )}
 
-  if (screen === "Home") {
-    return <Home setScreen={setScreen} />;
-  }
+      {screen === "RegistrarReciclagem" && (
+        <RegistrarReciclagem setScreen={setScreen} />
+      )}
 
-  if (screen === "MeuPerfil") {
-    return <MeuPerfil setScreen={setScreen} />;
-  }
+      {screen === "Home" && (
+        <Home setScreen={setScreen} />
+      )}
 
-  if (screen === "Desafios") {
-    return <Desafios setScreen={setScreen} />;
-  }
+      {screen === "MeuPerfil" && (
+        <MeuPerfil setScreen={setScreen} />
+      )}
 
-  if (screen === "Infos") {
-    return <Infos setScreen={setScreen} />;
-  }
+      {screen === "Desafios" && (
+        <Desafios setScreen={setScreen} />
+      )}
 
-  if (screen.startsWith("Perfil:")) {
-    return (
-      <PerfilConfiguracao
-        type={screen.slice(7)}
-        setScreen={setScreen}
-      />
-    );
-  }
+      {screen === "Infos" && (
+        <Infos setScreen={setScreen} />
+      )}
 
-  return <Login setScreen={setScreen} setUsuario={setUsuario} />;
+      {screen.startsWith("Perfil:") && (
+        <PerfilConfiguracao
+          type={screen.slice(7)}
+          setScreen={setScreen}
+        />
+      )}
+    </>
+  );
 }
