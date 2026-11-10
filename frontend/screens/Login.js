@@ -51,7 +51,7 @@ export default function Login({ setScreen, setUsuario }) {
         error.code === "auth/wrong-password" ||
         error.code === "auth/user-not-found"
       ) {
-        mensagem = "E-mail ou senha inválidos.";
+        mensagem = "E-mail ou senha inválidos. Verifique seus dados e tente novamente.";
       } else if (error.code === "auth/invalid-email") {
         mensagem = "Digite um e-mail válido.";
       } else if (error.code === "auth/too-many-requests") {

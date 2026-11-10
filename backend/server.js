@@ -7,8 +7,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json());
-
+app.use(express.json()); 
 
 app.post("/usuarios", async (req, res) => {
     const {
@@ -97,7 +96,6 @@ app.post("/usuarios", async (req, res) => {
     }
 });
 
-
 app.post("/login", async (req, res) => {
     const { email, senha } = req.body;
 
@@ -156,7 +154,6 @@ app.post("/login", async (req, res) => {
         }
     });
 });
-
 
 app.get("/usuarios/:id", (req, res) => {
     const { id } = req.params;

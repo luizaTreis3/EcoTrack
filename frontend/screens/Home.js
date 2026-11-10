@@ -260,7 +260,7 @@ export default function Home({ setScreen }) {
           <MapPin label="Categoria: água" color="#22c55e" style={{ top: 165, left: 190 }} />
         </View>
       </View>
-
+      
       {/* Dica sustentável */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Dica sustentável</Text>
