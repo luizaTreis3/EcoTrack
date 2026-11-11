@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import TabBar from "./TabBar";
@@ -510,12 +510,12 @@ export default function Home({ setScreen }) {
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 120 }}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Ionicons name="leaf" size={22} color="#22c55e" style={{ marginRight: 6 }} />
-          <Text style={styles.logoText}>
-            Eco<Text style={{ color: "#22c55e" }}>Track</Text>
-          </Text>
-        </View>
+        <Image
+          source={require("../assets/image/logoEcoTrackPreto.png")}
+          style={styles.logoImage}
+          resizeMode="contain"
+          accessibilityLabel="EcoTrack"
+        />
         <Pressable onPress={() => setMenuOpen((prev) => !prev)} hitSlop={12} style={styles.menuButton}>
           <Ionicons name="menu" size={26} color="#22c55e" />
         </Pressable>
@@ -797,10 +797,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  logoText: {
-    color: "#e5e5e5",
-    fontSize: 18,
-    fontWeight: "bold",
+  logoImage: {
+    width: 140,
+    height: 42,
+    borderRadius: 8,
   },
 
   section: {

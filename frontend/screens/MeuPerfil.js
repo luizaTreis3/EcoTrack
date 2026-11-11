@@ -1,17 +1,126 @@
-import { useState } from "react";
-import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
+import { API_URL } from "../src/services/api";
+import {
+  appendImageToFormData,
+  getImageUrl,
+  pickImageFromLibrary,
+} from "../src/services/imageStorage";
 
 export default function MeuPerfil({
   setScreen,
   usuario,
   dadosUsuario,
+  setDadosUsuario,
   carregandoPerfil,
   erroPerfil,
   onRetry,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [fotoPerfilUri, setFotoPerfilUri] = useState(null);
+  const [erroFotoPerfil, setErroFotoPerfil] = useState("");
+  const [alterandoFoto, setAlterandoFoto] = useState(false);
+
+  useEffect(() => {
+    let ativo = true;
+    const caminho = dadosUsuario?.imagem_perfil;
+
+    if (!caminho) {
+      setFotoPerfilUri(null);
+      setErroFotoPerfil("");
+      return () => {
+        ativo = false;
+      };
+    }
+
+    setFotoPerfilUri(null);
+    setErroFotoPerfil("");
+    getImageUrl(caminho)
+      .then((uri) => {
+        if (ativo) {
+          setFotoPerfilUri(uri);
+        }
+      })
+      .catch((error) => {
+        console.error("Erro ao carregar foto do perfil:", error);
+        if (ativo) {
+          setErroFotoPerfil("Não foi possível carregar sua foto.");
+        }
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [dadosUsuario?.imagem_perfil]);
+
+  async function alterarFotoPerfil() {
+    if (!usuario?.uid || !dadosUsuario) {
+      Alert.alert("Perfil indisponível", "Carregue seus dados e tente novamente.");
+      return;
+    }
+
+    setAlterandoFoto(true);
+
+    try {
+      const asset = await pickImageFromLibrary();
+      if (!asset) {
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("nome_completo", dadosUsuario.nome_completo || "");
+      formData.append("cep", dadosUsuario.cep || "");
+      formData.append("endereco", dadosUsuario.endereco || "");
+      formData.append("telefone", dadosUsuario.telefone || "");
+      formData.append("cpf", dadosUsuario.cpf || "");
+      formData.append("aceitou_termos", dadosUsuario.aceitou_termos ? "1" : "0");
+      formData.append(
+        "deseja_notificacoes",
+        dadosUsuario.deseja_notificacoes ? "1" : "0"
+      );
+      await appendImageToFormData(formData, asset);
+
+      const response = await fetch(
+        `${API_URL}/usuarios/firebase/${encodeURIComponent(usuario.uid)}`,
+        {
+          method: "PUT",
+          body: formData,
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.mensagem || "Não foi possível salvar a foto do perfil.");
+      }
+
+      setDadosUsuario({
+        ...dadosUsuario,
+        imagem_perfil: data.imagem_perfil,
+      });
+      Alert.alert("Sucesso", "Sua foto de perfil foi atualizada.");
+    } catch (error) {
+      console.error("Erro ao atualizar foto do perfil:", error);
+
+      Alert.alert(
+        "Não foi possível atualizar a foto",
+        error.message || "Verifique sua conexão e tente novamente."
+      );
+    } finally {
+      setAlterandoFoto(false);
+    }
+  }
+
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
@@ -65,10 +174,37 @@ export default function MeuPerfil({
         <View style={styles.profileRow}>
           <View style={styles.avatarWrapper}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>FOTO</Text>
+              {fotoPerfilUri ? (
+                <Image
+                  source={{ uri: fotoPerfilUri }}
+                  style={styles.avatarImage}
+                  onError={(event) => {
+                    console.error(
+                      "Erro ao exibir foto do perfil:",
+                      event.nativeEvent.error
+                    );
+                    setFotoPerfilUri(null);
+                    setErroFotoPerfil("Não foi possível exibir sua foto.");
+                  }}
+                />
+              ) : (
+                <Text style={styles.avatarText}>
+                  {erroFotoPerfil ? "ERRO" : "FOTO"}
+                </Text>
+              )}
             </View>
-            <Pressable style={styles.cameraButton} onPress={() => setScreen("Perfil:pessoal")}>
-              <Ionicons name="camera" size={16} color="#000" />
+            <Pressable
+              style={styles.cameraButton}
+              onPress={alterarFotoPerfil}
+              disabled={alterandoFoto}
+              accessibilityRole="button"
+              accessibilityLabel="Alterar foto do perfil"
+            >
+              {alterandoFoto ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Ionicons name="camera" size={16} color="#000" />
+              )}
             </Pressable>
           </View>
 
@@ -80,6 +216,10 @@ export default function MeuPerfil({
             <Text style={styles.email}>
               {usuario?.email || dadosUsuario?.email || ""}
             </Text>
+
+            {erroFotoPerfil ? (
+              <Text style={styles.profileImageError}>{erroFotoPerfil}</Text>
+            ) : null}
 
             {dadosUsuario?.endereco && (
               <View style={styles.infoLine}>
@@ -311,12 +451,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#161616",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "hidden",
+  },
+
+  avatarImage: {
+    width: "100%",
+    height: "100%",
   },
 
   avatarText: {
     color: "#8a8a8a",
     fontWeight: "bold",
     fontSize: 12,
+  },
+
+  profileImageError: {
+    color: "#fca5a5",
+    fontSize: 11,
+    marginTop: 4,
   },
 
   cameraButton: {

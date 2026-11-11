@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from "react-native";
+import {
+  Image,
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
 import { API_URL } from "../src/services/api";
+import { getImageUrl } from "../src/services/imageStorage";
 
 export default function Infos({
   setScreen,
@@ -273,12 +282,16 @@ export default function Infos({
 
           return (
           <Pressable key={item.id_relato} style={styles.relatoCard}>
-            <Ionicons
-              name={statusRelato.icon}
-              size={22}
-              color={statusRelato.iconColor}
-              style={{ marginRight: 12 }}
-            />
+            {item.imagem ? (
+              <RelatoImage caminho={item.imagem} />
+            ) : (
+              <Ionicons
+                name={statusRelato.icon}
+                size={22}
+                color={statusRelato.iconColor}
+                style={{ marginRight: 12 }}
+              />
+            )}
 
             <View style={styles.relatoInfo}>
               <Text style={styles.relatoTitle}>{item.titulo}</Text>
@@ -445,6 +458,59 @@ export default function Infos({
         </View>
       </ScrollView>
       <TabBar active="Infos" setScreen={setScreen} />
+    </View>
+  );
+}
+
+function RelatoImage({ caminho }) {
+  const [uri, setUri] = useState(null);
+  const [erro, setErro] = useState(false);
+
+  useEffect(() => {
+    let ativo = true;
+
+    getImageUrl(caminho)
+      .then((downloadUrl) => {
+        if (ativo) {
+          setUri(downloadUrl);
+        }
+      })
+      .catch((error) => {
+        console.error("Erro ao carregar imagem do relato:", error);
+        if (ativo) {
+          setErro(true);
+        }
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [caminho]);
+
+  if (erro) {
+    return (
+      <View style={styles.relatoThumbnail}>
+        <Text style={styles.relatoImageError}>Imagem indisponível</Text>
+      </View>
+    );
+  }
+
+  return uri ? (
+    <Image
+      source={{ uri }}
+      style={styles.relatoThumbnail}
+      accessibilityLabel="Imagem do relato"
+      onError={(event) => {
+        console.error(
+          "Erro ao exibir imagem do relato:",
+          event.nativeEvent.error
+        );
+        setErro(true);
+      }}
+    />
+  ) : (
+    <View style={styles.relatoThumbnail}>
+      <Ionicons name="image-outline" size={20} color="#8a8a8a" />
     </View>
   );
 }
@@ -654,7 +720,7 @@ const styles = StyleSheet.create({
 
   relatoCard: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     borderWidth: 1,
     borderColor: "#3a3a3a",
     backgroundColor: "#161616",
@@ -700,6 +766,22 @@ const styles = StyleSheet.create({
   relatoInfo: {
     flex: 1,
     marginRight: 8,
+  },
+
+  relatoThumbnail: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: "#252525",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  relatoImageError: {
+    color: "#fca5a5",
+    fontSize: 8,
+    textAlign: "center",
   },
 
   relatoTitle: {

@@ -12,6 +12,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
 import { API_URL } from "../src/services/api";
+import {
+  appendImageToFormData,
+  pickImageFromLibrary,
+} from "../src/services/imageStorage";
 
 export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -23,6 +27,7 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
   const [categoria, setCategoria] = useState("");
   const [descricao, setDescricao] = useState("");
   const [atualizarStatus, setAtualizarStatus] = useState(false);
+  const [imagemRelato, setImagemRelato] = useState(null);
 
   const [carregando, setCarregando] = useState(false);
 
@@ -33,6 +38,21 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
     { label: "Relato", screen: "CriarRelato", icon: "create-outline" },
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
+
+  async function selecionarImagemRelato() {
+    try {
+      const asset = await pickImageFromLibrary();
+      if (asset) {
+        setImagemRelato(asset);
+      }
+    } catch (error) {
+      console.error("Erro ao selecionar imagem do relato:", error);
+      Alert.alert(
+        "Não foi possível selecionar a imagem",
+        error.message || "Verifique a permissão da galeria e tente novamente."
+      );
+    }
+  }
 
   async function handleCriarRelato() {
     const idUsuario = dadosUsuario?.id_usuario || usuario?.id_usuario;
@@ -58,37 +78,44 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
     setCarregando(true);
 
     try {
+      const relato = {
+        id_usuario: idUsuario,
+        titulo: titulo.trim(),
+        bairro: bairro.trim(),
+        endereco: endereco.trim(),
+        categoria: categoria.trim(),
+        descricao: descricao.trim(),
+        atualizar_status: atualizarStatus,
+      };
+      let body = JSON.stringify(relato);
+      let headers = { "Content-Type": "application/json" };
+
+      if (imagemRelato) {
+        const formData = new FormData();
+        Object.entries(relato).forEach(([campo, valor]) => {
+          formData.append(
+            campo,
+            typeof valor === "boolean" ? (valor ? "1" : "0") : String(valor)
+          );
+        });
+        await appendImageToFormData(formData, imagemRelato);
+        body = formData;
+        headers = undefined;
+      }
+
       const response = await fetch(
         `${API_URL}/relatos`,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            // ID do usuário que criou o relato
-            id_usuario: idUsuario,
-
-            titulo: titulo.trim(),
-            bairro: bairro.trim(),
-            endereco: endereco.trim(),
-            categoria: categoria.trim(),
-            descricao: descricao.trim(),
-            imagem: null,
-            atualizar_status: atualizarStatus,
-          }),
+          headers,
+          body,
         }
       );
 
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert(
-          "Erro",
-          data.mensagem || "Não foi possível criar o relato."
-        );
-        return;
+        throw new Error(data.mensagem || "Não foi possível criar o relato.");
       }
 
       Alert.alert(
@@ -103,14 +130,15 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
       setCategoria("");
       setDescricao("");
       setAtualizarStatus(false);
+      setImagemRelato(null);
       setScreen("Infos");
 
     } catch (error) {
       console.error("Erro ao criar relato:", error);
 
       Alert.alert(
-        "Erro de conexão",
-        "Não foi possível conectar ao servidor."
+        "Não foi possível criar o relato",
+        error.message || "Verifique sua conexão e tente novamente."
       );
 
     } finally {
@@ -212,15 +240,38 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
             onChangeText={setTitulo}
           />
 
-          <Pressable style={styles.uploadBox}>
-            <Image
-              source={require("../assets/image/upload.png")}
-              style={styles.uploadImage}
-              resizeMode="contain"
-            />
+          <Pressable
+            style={styles.uploadBox}
+            onPress={selecionarImagemRelato}
+            disabled={carregando}
+            accessibilityRole="button"
+            accessibilityLabel={imagemRelato ? "Alterar imagem do relato" : "Adicionar imagem ao relato"}
+          >
+            {imagemRelato ? (
+              <Image
+                source={{ uri: imagemRelato.uri }}
+                style={styles.uploadPreview}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image
+                source={require("../assets/image/upload.png")}
+                style={styles.uploadImage}
+                resizeMode="contain"
+              />
+            )}
           </Pressable>
 
         </View>
+        {imagemRelato ? (
+          <Pressable
+            style={styles.removeImageButton}
+            onPress={() => setImagemRelato(null)}
+            disabled={carregando}
+          >
+            <Text style={styles.removeImageText}>Remover imagem</Text>
+          </Pressable>
+        ) : null}
 
         {/* BAIRRO */}
         <TextInput
@@ -459,6 +510,24 @@ const styles = StyleSheet.create({
   uploadImage: {
     width: 40,
     height: 40,
+  },
+
+  uploadPreview: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 11,
+  },
+
+  removeImageButton: {
+    alignSelf: "flex-end",
+    marginTop: -12,
+    marginBottom: 14,
+    paddingVertical: 4,
+  },
+
+  removeImageText: {
+    color: "#fca5a5",
+    fontSize: 12,
   },
 
   checkbox: {

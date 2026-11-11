@@ -132,6 +132,7 @@ export default function App() {
           setScreen={setScreen}
           usuario={usuario}
           dadosUsuario={dadosUsuario}
+          setDadosUsuario={setDadosUsuario}
           carregandoPerfil={carregandoPerfil}
           erroPerfil={erroPerfil}
           onRetry={recarregarPerfil}
