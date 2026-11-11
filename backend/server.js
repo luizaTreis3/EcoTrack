@@ -11,6 +11,7 @@ app.use(express.json());
 
 app.post("/usuarios", async (req, res) => {
     const {
+        firebase_uid,
         nome_completo,
         email,
         cep,
@@ -23,6 +24,7 @@ app.post("/usuarios", async (req, res) => {
     } = req.body;
 
     if (
+        !firebase_uid ||
         !nome_completo ||
         !email ||
         !cep ||
@@ -39,8 +41,8 @@ app.post("/usuarios", async (req, res) => {
         const senhaHash = await bcrypt.hash(senha, 10);
 
         const sql = `
-            INSERT INTO usuarios
-            (
+            INSERT INTO usuarios (
+                firebase_uid,
                 nome_completo,
                 email,
                 cep,
@@ -51,14 +53,15 @@ app.post("/usuarios", async (req, res) => {
                 aceitou_termos,
                 deseja_notificacoes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
         const valores = [
+            firebase_uid,
             nome_completo,
             email,
             cep,
-            endereco,
+            endereco || null,
             telefone,
             cpf,
             senhaHash,
@@ -72,7 +75,7 @@ app.post("/usuarios", async (req, res) => {
 
                 if (err.code === "ER_DUP_ENTRY") {
                     return res.status(400).json({
-                        mensagem: "E-mail ou CPF já cadastrado."
+                        mensagem: "E-mail, CPF ou conta já cadastrada."
                     });
                 }
 
@@ -81,7 +84,7 @@ app.post("/usuarios", async (req, res) => {
                 });
             }
 
-            res.status(201).json({
+            return res.status(201).json({
                 mensagem: "Usuário cadastrado com sucesso!",
                 id_usuario: result.insertId
             });
@@ -90,10 +93,122 @@ app.post("/usuarios", async (req, res) => {
     } catch (error) {
         console.error("Erro ao gerar hash da senha:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             mensagem: "Erro interno do servidor."
         });
     }
+});
+
+app.get("/usuarios/firebase/:uid", (req, res) => {
+    const { uid } = req.params;
+
+    const sql = `
+        SELECT
+            id_usuario,
+            firebase_uid,
+            nome_completo,
+            email,
+            cep,
+            endereco,
+            telefone,
+            cpf,
+            aceitou_termos,
+            deseja_notificacoes,
+            data_cadastro
+        FROM usuarios
+        WHERE firebase_uid = ?
+    `;
+
+    db.query(sql, [uid], (err, results) => {
+        if (err) {
+            console.error("Erro ao buscar usuário:", err);
+            return res.status(500).json({
+                mensagem: "Erro ao buscar usuário."
+            });
+        }
+
+        if (results.length === 0) {
+            return res.status(404).json({
+                mensagem: "Usuário não encontrado."
+            });
+        }
+
+        return res.status(200).json({
+            usuario: results[0]
+        });
+    });
+});
+
+
+// ATUALIZAR DADOS DO USUÁRIO PELO UID DO FIREBASE
+app.put("/usuarios/firebase/:uid", (req, res) => {
+    const { uid } = req.params;
+
+    const {
+        nome_completo,
+        cep,
+        endereco,
+        telefone,
+        cpf,
+        aceitou_termos,
+        deseja_notificacoes
+    } = req.body;
+
+    if (!nome_completo || !cep || !telefone || !cpf) {
+        return res.status(400).json({
+            mensagem: "Preencha todos os campos obrigatórios."
+        });
+    }
+
+    const sql = `
+        UPDATE usuarios
+        SET
+            nome_completo = ?,
+            cep = ?,
+            endereco = ?,
+            telefone = ?,
+            cpf = ?,
+            aceitou_termos = ?,
+            deseja_notificacoes = ?
+        WHERE firebase_uid = ?
+    `;
+
+    const valores = [
+        nome_completo,
+        cep,
+        endereco || null,
+        telefone,
+        cpf,
+        aceitou_termos,
+        deseja_notificacoes,
+        uid
+    ];
+
+    db.query(sql, valores, (err, result) => {
+        if (err) {
+            console.error("Erro ao atualizar usuário:", err);
+
+            if (err.code === "ER_DUP_ENTRY") {
+                return res.status(400).json({
+                    mensagem: "Este CPF já está cadastrado."
+                });
+            }
+
+            return res.status(500).json({
+                mensagem: "Erro ao atualizar usuário."
+            });
+        }
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({
+                mensagem: "Usuário não encontrado."
+            });
+        }
+
+        return res.status(200).json({
+            mensagem: "Dados atualizados com sucesso!"
+        });
+    });
 });
 
 app.post("/login", async (req, res) => {
@@ -155,6 +270,58 @@ app.post("/login", async (req, res) => {
     });
 });
 
+app.get("/usuarios/:id/relatos", (req, res) => {
+    const { id } = req.params;
+
+    const sql = `
+        SELECT
+            id_relato,
+            id_usuario,
+            titulo,
+            bairro,
+            endereco,
+            categoria,
+            descricao,
+            imagem,
+            atualizar_status,
+            status,
+            data_criacao
+        FROM relatos
+        WHERE id_usuario = ?
+        ORDER BY data_criacao DESC
+    `;
+
+    const atualizarStatusSql = `
+        UPDATE relatos
+        SET status = 'Em análise'
+        WHERE id_usuario = ?
+            AND status = 'Pendente'
+            AND data_criacao <= DATE_SUB(NOW(), INTERVAL 3 DAY)
+    `;
+
+    db.query(atualizarStatusSql, [id], (statusErr) => {
+        if (statusErr) {
+            console.error("Erro ao atualizar status dos relatos do usuário:", statusErr);
+            return res.status(500).json({
+                mensagem: "Erro ao atualizar o status dos relatos."
+            });
+        }
+
+        db.query(sql, [id], (err, results) => {
+            if (err) {
+                console.error("Erro ao buscar relatos do usuário:", err);
+                return res.status(500).json({
+                    mensagem: "Erro ao buscar seus relatos."
+                });
+            }
+
+            return res.status(200).json({
+                relatos: results
+            });
+        });
+    });
+});
+
 app.get("/usuarios/:id", (req, res) => {
     const { id } = req.params;
 
@@ -201,7 +368,6 @@ app.put("/usuarios/:id", (req, res) => {
 
     const {
         nome_completo,
-        email,
         cep,
         endereco,
         telefone,
@@ -210,9 +376,14 @@ app.put("/usuarios/:id", (req, res) => {
         deseja_notificacoes
     } = req.body;
 
+    if (Object.prototype.hasOwnProperty.call(req.body, "email")) {
+        return res.status(400).json({
+            mensagem: "Altere o e-mail pelo fluxo de confirmação do Firebase."
+        });
+    }
+
     if (
         !nome_completo ||
-        !email ||
         !cep ||
         !telefone ||
         !cpf
@@ -226,7 +397,6 @@ app.put("/usuarios/:id", (req, res) => {
         UPDATE usuarios
         SET
             nome_completo = ?,
-            email = ?,
             cep = ?,
             endereco = ?,
             telefone = ?,
@@ -238,7 +408,6 @@ app.put("/usuarios/:id", (req, res) => {
 
     const valores = [
         nome_completo,
-        email,
         cep,
         endereco,
         telefone,
@@ -254,7 +423,7 @@ app.put("/usuarios/:id", (req, res) => {
 
             if (err.code === "ER_DUP_ENTRY") {
                 return res.status(400).json({
-                    mensagem: "E-mail ou CPF já cadastrado."
+                    mensagem: "CPF já cadastrado."
                 });
             }
 
@@ -615,22 +784,39 @@ app.get("/relatos", (req, res) => {
             descricao,
             imagem,
             atualizar_status,
+            status,
             data_criacao
         FROM relatos
         ORDER BY data_criacao DESC
     `;
 
-    db.query(sql, (err, results) => {
-        if (err) {
-            console.error("Erro ao buscar relatos:", err);
+    const atualizarStatusSql = `
+        UPDATE relatos
+        SET status = 'Em análise'
+        WHERE status = 'Pendente'
+            AND data_criacao <= DATE_SUB(NOW(), INTERVAL 3 DAY)
+    `;
 
+    db.query(atualizarStatusSql, (statusErr) => {
+        if (statusErr) {
+            console.error("Erro ao atualizar status dos relatos:", statusErr);
             return res.status(500).json({
-                mensagem: "Erro ao buscar relatos."
+                mensagem: "Erro ao atualizar o status dos relatos."
             });
         }
 
-        res.status(200).json({
-            relatos: results
+        db.query(sql, (err, results) => {
+            if (err) {
+                console.error("Erro ao buscar relatos:", err);
+
+                return res.status(500).json({
+                    mensagem: "Erro ao buscar relatos."
+                });
+            }
+
+            res.status(200).json({
+                relatos: results
+            });
         });
     });
 });
@@ -651,28 +837,46 @@ app.get("/relatos/:id", (req, res) => {
             descricao,
             imagem,
             atualizar_status,
+            status,
             data_criacao
         FROM relatos
         WHERE id_relato = ?
     `;
 
-    db.query(sql, [id], (err, results) => {
-        if (err) {
-            console.error("Erro ao buscar relato:", err);
+    const atualizarStatusSql = `
+        UPDATE relatos
+        SET status = 'Em análise'
+        WHERE id_relato = ?
+            AND status = 'Pendente'
+            AND data_criacao <= DATE_SUB(NOW(), INTERVAL 3 DAY)
+    `;
 
+    db.query(atualizarStatusSql, [id], (statusErr) => {
+        if (statusErr) {
+            console.error("Erro ao atualizar status do relato:", statusErr);
             return res.status(500).json({
-                mensagem: "Erro ao buscar relato."
+                mensagem: "Erro ao atualizar o status do relato."
             });
         }
 
-        if (results.length === 0) {
-            return res.status(404).json({
-                mensagem: "Relato não encontrado."
-            });
-        }
+        db.query(sql, [id], (err, results) => {
+            if (err) {
+                console.error("Erro ao buscar relato:", err);
 
-        res.status(200).json({
-            relato: results[0]
+                return res.status(500).json({
+                    mensagem: "Erro ao buscar relato."
+                });
+            }
+
+            if (results.length === 0) {
+                return res.status(404).json({
+                    mensagem: "Relato não encontrado."
+                });
+            }
+
+            res.status(200).json({
+                relato: results[0]
+            });
         });
     });
 });
@@ -713,9 +917,10 @@ app.post("/relatos", (req, res) => {
             categoria,
             descricao,
             imagem,
-            atualizar_status
+            atualizar_status,
+            status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')
     `;
 
     const valores = [
@@ -748,7 +953,8 @@ app.post("/relatos", (req, res) => {
         res.status(201).json({
             mensagem: "Relato cadastrado com sucesso!",
             id_relato: result.insertId,
-            id_usuario: id_usuario
+            id_usuario: id_usuario,
+            status: "Pendente"
         });
     });
 });
