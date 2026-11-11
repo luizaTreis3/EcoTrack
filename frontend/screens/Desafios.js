@@ -390,7 +390,11 @@ function ProgressRing({ progress, size, strokeWidth }) {
   const strokeDashoffset = circumference * (1 - progress);
 
   return (
-    <Svg width={size} height={size}>
+    <Svg
+      width={size}
+      height={size}
+      style={{ transform: [{ rotate: "-90deg" }] }}
+    >
       <Circle
         stroke="#2a2a2a"
         fill="none"
@@ -409,8 +413,6 @@ function ProgressRing({ progress, size, strokeWidth }) {
         strokeDasharray={circumference}
         strokeDashoffset={strokeDashoffset}
         strokeLinecap="round"
-        rotation="-90"
-        origin={`${size / 2}, ${size / 2}`}
       />
     </Svg>
   );

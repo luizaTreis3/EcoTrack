@@ -3,7 +3,14 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
 
-export default function MeuPerfil({ setScreen }) {
+export default function MeuPerfil({
+  setScreen,
+  usuario,
+  dadosUsuario,
+  carregandoPerfil,
+  erroPerfil,
+  onRetry,
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
@@ -66,20 +73,55 @@ export default function MeuPerfil({ setScreen }) {
           </View>
 
           <View style={styles.profileInfo}>
-            <Text style={styles.name}>Lucas Oliveira S.</Text>
-            <Text style={styles.email}>lucas.oliveira.ss@gmail.com</Text>
+            <Text style={styles.name}>
+              {dadosUsuario?.nome_completo ||
+                (carregandoPerfil ? "Carregando perfil..." : "Dados indisponíveis")}
+            </Text>
+            <Text style={styles.email}>
+              {usuario?.email || dadosUsuario?.email || ""}
+            </Text>
 
-            <View style={styles.infoLine}>
-              <Ionicons name="location-outline" size={14} color="#8a8a8a" />
-              <Text style={styles.infoText}>Schariau, SL</Text>
-            </View>
+            {dadosUsuario?.endereco && (
+              <View style={styles.infoLine}>
+                <Ionicons name="location-outline" size={14} color="#8a8a8a" />
+                <Text style={styles.infoText}>{dadosUsuario.endereco}</Text>
+              </View>
+            )}
 
-            <View style={styles.infoLine}>
-              <Ionicons name="calendar-outline" size={14} color="#8a8a8a" />
-              <Text style={styles.infoText}>Membro desde jan/2026</Text>
-            </View>
+            {dadosUsuario?.cep && (
+              <View style={styles.infoLine}>
+                <Ionicons name="navigate-outline" size={14} color="#8a8a8a" />
+                <Text style={styles.infoText}>CEP {dadosUsuario.cep}</Text>
+              </View>
+            )}
+
+            {dadosUsuario?.telefone && (
+              <View style={styles.infoLine}>
+                <Ionicons name="call-outline" size={14} color="#8a8a8a" />
+                <Text style={styles.infoText}>{dadosUsuario.telefone}</Text>
+              </View>
+            )}
+
+            {dadosUsuario?.data_cadastro && (
+              <View style={styles.infoLine}>
+                <Ionicons name="calendar-outline" size={14} color="#8a8a8a" />
+                <Text style={styles.infoText}>
+                  Membro desde{" "}
+                  {new Date(dadosUsuario.data_cadastro).toLocaleDateString(
+                    "pt-BR",
+                    { month: "short", year: "numeric" }
+                  )}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
+
+        {erroPerfil ? (
+          <Pressable style={styles.profileError} onPress={onRetry}>
+            <Text style={styles.profileErrorText}>{erroPerfil} Toque para tentar novamente.</Text>
+          </Pressable>
+        ) : null}
 
         {/* Card de impacto */}
         <View style={styles.impactCard}>
@@ -122,7 +164,7 @@ export default function MeuPerfil({ setScreen }) {
         <Text style={styles.sectionTitle}>Conta</Text>
         <View style={styles.menuGroup}>
           <MenuItem icon="person-outline" label="Informações pessoais" onPress={() => setScreen("Perfil:pessoal")} />
-          <MenuItem icon="lock-closed-outline" label="Segurança" onPress={() => setScreen("RecuperarAcesso")} />
+          <MenuItem icon="lock-closed-outline" label="Segurança" onPress={() => setScreen("Perfil:seguranca")} />
           <MenuItem icon="notifications-outline" label="Notificações" onPress={() => setScreen("Perfil:notificacoes")} />
           <MenuItem icon="shield-checkmark-outline" label="Privacidade" onPress={() => setScreen("Perfil:privacidade")} isLast />
         </View>
@@ -234,6 +276,18 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingBottom: 130,
+  },
+
+  profileError: {
+    backgroundColor: "#2a1717",
+    borderRadius: 10,
+    marginBottom: 20,
+    padding: 12,
+  },
+
+  profileErrorText: {
+    color: "#fca5a5",
+    fontSize: 13,
   },
 
   profileRow: {

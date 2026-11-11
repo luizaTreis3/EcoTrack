@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_URL } from "../src/services/api";
 
 import {
   View,
@@ -62,6 +63,14 @@ export default function Cadastro({ setScreen }) {
       return;
     }
 
+    if (senha.length < 6) {
+      Alert.alert(
+        "Senha muito curta",
+        "A senha deve ter pelo menos 6 caracteres."
+      );
+      return;
+    }
+
     // Verifica os termos
     if (!aceitouTermos) {
       Alert.alert(
@@ -99,28 +108,24 @@ export default function Cadastro({ setScreen }) {
        * Salva os dados completos do usuário
        * no banco MySQL através do backend.
        */
-      const response = await fetch(
-        "http://localhost:3000/usuarios",
-        {
-          method: "POST",
-
-          headers: {
+      const response = await fetch(`${API_URL}/usuarios`, {
+        method: "POST",
+        headers: {
             "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            nome_completo: nome.trim(),
-            email: email.trim(),
-            cep: cep.trim(),
-            endereco: endereco.trim(),
-            telefone: telefone.trim(),
-            cpf: cpf.trim(),
-            senha: senha,
-            aceitou_termos: aceitouTermos,
-            deseja_notificacoes: desejaNotificacoes,
-          }),
-        }
-      );
+        },
+        body: JSON.stringify({
+          firebase_uid: usuarioFirebase.uid,
+          nome_completo: nome.trim(),
+          email: email.trim(),
+          cep: cep.trim(),
+          endereco: endereco.trim(),
+          telefone: telefone.trim(),
+          cpf: cpf.trim(),
+          senha: senha,
+          aceitou_termos: aceitouTermos,
+          deseja_notificacoes: desejaNotificacoes,
+      }),
+    });
 
       const data = await response.json();
 
@@ -213,7 +218,7 @@ export default function Cadastro({ setScreen }) {
         "auth/weak-password"
       ) {
         mensagem =
-          "A senha é muito fraca.";
+          "A senha deve ter pelo menos 6 caracteres.";
 
       } else if (
         error.code ===

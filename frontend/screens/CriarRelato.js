@@ -11,8 +11,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
+import { API_URL } from "../src/services/api";
 
-export default function CriarRelato({ setScreen, usuario }) {
+export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Estados dos campos
@@ -34,11 +35,13 @@ export default function CriarRelato({ setScreen, usuario }) {
   ];
 
   async function handleCriarRelato() {
+    const idUsuario = dadosUsuario?.id_usuario || usuario?.id_usuario;
+
     // Verifica se existe usuário logado
-    if (!usuario || !usuario.id_usuario) {
+    if (!usuario?.uid || !idUsuario) {
       Alert.alert(
         "Erro",
-        "Não foi possível identificar o usuário logado."
+        "Não foi possível identificar seu cadastro. Tente novamente em instantes."
       );
       return;
     }
@@ -56,7 +59,7 @@ export default function CriarRelato({ setScreen, usuario }) {
 
     try {
       const response = await fetch(
-        "http://192.168.1.21:3000/relatos",
+        `${API_URL}/relatos`,
         {
           method: "POST",
           headers: {
@@ -65,7 +68,7 @@ export default function CriarRelato({ setScreen, usuario }) {
 
           body: JSON.stringify({
             // ID do usuário que criou o relato
-            id_usuario: usuario.id_usuario,
+            id_usuario: idUsuario,
 
             titulo: titulo.trim(),
             bairro: bairro.trim(),
@@ -100,6 +103,7 @@ export default function CriarRelato({ setScreen, usuario }) {
       setCategoria("");
       setDescricao("");
       setAtualizarStatus(false);
+      setScreen("Infos");
 
     } catch (error) {
       console.error("Erro ao criar relato:", error);

@@ -1,12 +1,79 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
+import { API_URL } from "../src/services/api";
 
-export default function Infos({ setScreen }) {
+export default function Infos({
+  setScreen,
+  dadosUsuario,
+  carregandoPerfil,
+  erroPerfil,
+}) {
   const [categoriaAtiva, setCategoriaAtiva] = useState("Todas");
   const [diaAtivo, setDiaAtivo] = useState("Seg");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [relatos, setRelatos] = useState([]);
+  const [carregandoRelatos, setCarregandoRelatos] = useState(false);
+  const [erroRelatos, setErroRelatos] = useState("");
+
+  useEffect(() => {
+    let ativo = true;
+    const idUsuario = dadosUsuario?.id_usuario;
+
+    if (!idUsuario) {
+      setRelatos([]);
+      setErroRelatos("");
+      setCarregandoRelatos(false);
+      return () => {
+        ativo = false;
+      };
+    }
+
+    async function carregarRelatos() {
+      setCarregandoRelatos(true);
+      setErroRelatos("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/usuarios/${encodeURIComponent(idUsuario)}/relatos`
+        );
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.toLowerCase().includes("application/json")) {
+          const mensagem = response.status === 404
+            ? "A rota de relatos não foi encontrada no backend. Reinicie o servidor do backend e tente novamente."
+            : "O backend retornou uma resposta inesperada ao carregar seus relatos.";
+          throw new Error(mensagem);
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.mensagem || "Não foi possível carregar seus relatos.");
+        }
+
+        if (ativo) {
+          setRelatos(Array.isArray(data.relatos) ? data.relatos : []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar relatos do usuário:", error);
+        if (ativo) {
+          setErroRelatos(error.message || "Não foi possível carregar seus relatos.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoRelatos(false);
+        }
+      }
+    }
+
+    carregarRelatos();
+
+    return () => {
+      ativo = false;
+    };
+  }, [dadosUsuario?.id_usuario]);
 
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
@@ -24,39 +91,6 @@ export default function Infos({ setScreen }) {
     { nome: "Metal", icon: "hardware-chip-outline", qtd: 4, color: "#facc15" },
     { nome: "Orgânicos", icon: "leaf-outline", qtd: 4, color: "#92400e" },
     { nome: "Perigoso", icon: "warning-outline", qtd: 2, color: "#f97316" },
-  ];
-
-  const relatos = [
-    {
-      icon: "checkmark-circle",
-      iconColor: "#22c55e",
-      titulo: "Lixo descartado irregularmente",
-      endereco: "Av. Mauá, 1234 - Centro",
-      data: "12/05/2026 · 10:30",
-      status: "Resolvido",
-      statusBg: "#0f2e1a",
-      statusColor: "#22c55e",
-    },
-    {
-      icon: "time",
-      iconColor: "#3b82f6",
-      titulo: "Coleta não realizada",
-      endereco: "R. São João, 567 - Schariau",
-      data: "10/05/2026 · 08:15",
-      status: "Em andamento",
-      statusBg: "#0f1f2e",
-      statusColor: "#3b82f6",
-    },
-    {
-      icon: "alert-circle",
-      iconColor: "#ef4444",
-      titulo: "Entulho na via pública",
-      endereco: "R. Independência, 890 - Vila Nova",
-      data: "08/05/2026 · 14:40",
-      status: "Pendente",
-      statusBg: "#2e0f0f",
-      statusColor: "#ef4444",
-    },
   ];
 
   const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -182,42 +216,97 @@ export default function Infos({ setScreen }) {
         </ScrollView>
 
         {/* Meus relatos */}
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Meus relatos</Text>
-          <Pressable style={styles.sortRow}>
-            <Text style={styles.sortText}>Ver todos</Text>
-            <Ionicons name="chevron-forward" size={14} color="#22c55e" />
-          </Pressable>
-        </View>
+        <Text style={[styles.sectionTitle, styles.meusRelatosTitle]}>
+          Meus relatos
+        </Text>
 
-        {relatos.map((item, index) => (
-          <Pressable key={index} style={styles.relatoCard}>
-            <Ionicons name={item.icon} size={22} color={item.iconColor} style={{ marginRight: 12 }} />
+        {carregandoPerfil || carregandoRelatos ? (
+          <Text style={styles.relatoEmpty}>Carregando seus relatos...</Text>
+        ) : erroPerfil ? (
+          <Text style={styles.relatoError}>{erroPerfil}</Text>
+        ) : erroRelatos ? (
+          <Text style={styles.relatoError}>{erroRelatos}</Text>
+        ) : relatos.length === 0 ? (
+          <View style={styles.relatoEmptyCard}>
+            <Text style={styles.relatoEmpty}>
+              Você ainda não criou nenhum relato.
+            </Text>
+            <Pressable
+              style={styles.criarRelatoButton}
+              onPress={() => setScreen("CriarRelato")}
+            >
+              <Text style={styles.criarRelatoButtonText}>Criar relato</Text>
+            </Pressable>
+          </View>
+        ) : relatos.map((item) => {
+          const dataRelato = item.data_criacao
+            ? new Date(item.data_criacao).toLocaleString("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })
+            : "";
+          const statusRelato = {
+            Pendente: {
+              icon: "time",
+              iconColor: "#facc15",
+              backgroundColor: "#2e270f",
+              color: "#facc15",
+            },
+            "Em análise": {
+              icon: "search",
+              iconColor: "#3b82f6",
+              backgroundColor: "#0f1f2e",
+              color: "#3b82f6",
+            },
+            Resolvido: {
+              icon: "checkmark-circle",
+              iconColor: "#22c55e",
+              backgroundColor: "#0f2e1a",
+              color: "#22c55e",
+            },
+          }[item.status] || {
+            icon: "time",
+            iconColor: "#facc15",
+            backgroundColor: "#2e270f",
+            color: "#facc15",
+          };
+
+          return (
+          <Pressable key={item.id_relato} style={styles.relatoCard}>
+            <Ionicons
+              name={statusRelato.icon}
+              size={22}
+              color={statusRelato.iconColor}
+              style={{ marginRight: 12 }}
+            />
 
             <View style={styles.relatoInfo}>
               <Text style={styles.relatoTitle}>{item.titulo}</Text>
 
               <View style={styles.relatoLine}>
                 <Ionicons name="location-outline" size={12} color="#8a8a8a" />
-                <Text style={styles.relatoText}>{item.endereco}</Text>
+                <Text style={styles.relatoText}>
+                  {item.endereco} · {item.bairro}
+                </Text>
               </View>
 
               <View style={styles.relatoLine}>
                 <Ionicons name="time-outline" size={12} color="#8a8a8a" />
-                <Text style={styles.relatoText}>{item.data}</Text>
+                <Text style={styles.relatoText}>{dataRelato}</Text>
               </View>
             </View>
 
             <View style={styles.relatoRight}>
-              <View style={[styles.statusBadge, { backgroundColor: item.statusBg }]}>
-                <Text style={[styles.statusText, { color: item.statusColor }]}>
-                  {item.status}
+              <View style={[styles.statusBadge, { backgroundColor: statusRelato.backgroundColor }]}>
+                <Text style={[styles.statusText, { color: statusRelato.color }]}>
+                  {item.status || "Pendente"}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color="#8a8a8a" style={{ marginTop: 8 }} />
             </View>
           </Pressable>
-        ))}
+          );
+        })}
 
         {/* Coleta Seletiva */}
         <Text style={styles.sectionTitle}>Coleta Seletiva</Text>
@@ -514,6 +603,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 
+  meusRelatosTitle: {
+    marginTop: 16,
+    marginBottom: 14,
+  },
+
   sortRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -567,6 +661,40 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
+  },
+
+  relatoEmptyCard: {
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    backgroundColor: "#161616",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 18,
+  },
+
+  relatoEmpty: {
+    color: "#8a8a8a",
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+
+  relatoError: {
+    color: "#fca5a5",
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 18,
+  },
+
+  criarRelatoButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+  },
+
+  criarRelatoButtonText: {
+    color: "#22c55e",
+    fontSize: 13,
+    fontWeight: "bold",
   },
 
   relatoInfo: {

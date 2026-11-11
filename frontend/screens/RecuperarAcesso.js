@@ -1,10 +1,59 @@
+import { useState } from "react";
 import { useWindowDimensions } from "react-native";
-import { View, Text, TextInput, Pressable, StyleSheet, Image, ScrollView } from "react-native";
+import { Alert, View, Text, TextInput, Pressable, StyleSheet, Image, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "../src/services/firebaseConfig";
 
 export default function RecuperarAcesso({ setScreen }) {
   const { width } = useWindowDimensions();
   const lockSize = Math.min(Math.max(width - 80, 180), 280);
+  const [email, setEmail] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviarLinkRecuperacao() {
+    const emailInformado = email.trim();
+
+    if (!emailInformado) {
+      Alert.alert("Atenção", "Informe o e-mail da sua conta.");
+      return;
+    }
+
+    setEnviando(true);
+
+    try {
+      await sendPasswordResetEmail(auth, emailInformado);
+      Alert.alert(
+        "Verifique seu e-mail",
+        "Se houver uma conta com esse endereço, você receberá um link para redefinir a senha. Verifique também a caixa de spam."
+      );
+    } catch (error) {
+      console.error("Erro ao enviar link de recuperação:", error);
+
+      if (error.code === "auth/invalid-email") {
+        Alert.alert("E-mail inválido", "Confira o endereço informado e tente novamente.");
+      } else if (error.code === "auth/too-many-requests") {
+        Alert.alert("Aguarde", "Muitas tentativas. Tente novamente mais tarde.");
+      } else if (error.code === "auth/operation-not-allowed") {
+        Alert.alert(
+          "Serviço indisponível",
+          "A redefinição de senha não está habilitada no Firebase."
+        );
+      } else if (error.code === "auth/user-not-found" || error.code === "auth/user-disabled") {
+        Alert.alert(
+          "Verifique seu e-mail",
+          "Se houver uma conta com esse endereço, você receberá um link para redefinir a senha. Verifique também a caixa de spam."
+        );
+      } else {
+        Alert.alert(
+          "Erro",
+          "Não foi possível enviar o link. Verifique sua conexão e tente novamente."
+        );
+      }
+    } finally {
+      setEnviando(false);
+    }
+  }
 
   return (
 
@@ -47,17 +96,26 @@ export default function RecuperarAcesso({ setScreen }) {
                 {'Informe o e-mail cadastrado na sua conta\nque enviaremos um link para você\nredefinir sua senha.'}
             </Text>
         
-        <TextInput 
+        <TextInput
           style={styles.input} 
           placeholder="E-mail*" 
           placeholderTextColor="#fff" 
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          editable={!enviando}
         />
 
-        <Pressable 
-          onPress={() => setScreen("RedefinirSenha")}
-          style={styles.button}>
-          
-          <Text style={styles.buttonText}>➜ Enviar Link de Recuperação</Text>
+        <Pressable
+          onPress={enviarLinkRecuperacao}
+          style={[styles.button, enviando && styles.buttonDisabled]}
+          disabled={enviando}
+        >
+          <Text style={styles.buttonText}>
+            {enviando ? "Enviando..." : "➜ Enviar Link de Recuperação"}
+          </Text>
         </Pressable>
 
         <Text style={styles.lembrou}>
@@ -125,6 +183,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: 40,
+  },
+
+  buttonDisabled: {
+    opacity: 0.6,
   },
 
   buttonText: {

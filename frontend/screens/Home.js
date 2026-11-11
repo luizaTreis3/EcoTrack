@@ -1,8 +1,426 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import TabBar from "./TabBar";
+
+const dicasSustentaveis = [
+  {
+    titulo: "Leve sua garrafa reutilizável",
+    texto: "Use uma garrafa durável no dia a dia para evitar copos e garrafas descartáveis.",
+  },
+  {
+    titulo: "Separe os recicláveis",
+    texto: "Mantenha papel, plástico, vidro e metal separados dos resíduos orgânicos e rejeitos.",
+  },
+  {
+    titulo: "Dê preferência a sacolas reutilizáveis",
+    texto: "Tenha uma ecobag por perto para reduzir o uso de sacolas descartáveis nas compras.",
+  },
+  {
+    titulo: "Economize água ao escovar os dentes",
+    texto: "Feche a torneira durante a escovação e abra apenas para enxaguar.",
+  },
+  {
+    titulo: "Apague as luzes ao sair",
+    texto: "Desligue as luzes de ambientes vazios e aproveite a iluminação natural sempre que possível.",
+  },
+  {
+    titulo: "Planeje suas refeições",
+    texto: "Organize as compras e aproveite os alimentos antes que estraguem para reduzir o desperdício.",
+  },
+  {
+    titulo: "Prefira caminhar ou pedalar",
+    texto: "Em trajetos curtos e seguros, escolha ir a pé ou de bicicleta em vez de usar o carro.",
+  },
+  {
+    titulo: "Desligue aparelhos sem uso",
+    texto: "Retire carregadores da tomada e desligue equipamentos quando não estiverem sendo usados.",
+  },
+  {
+    titulo: "Reutilize potes e embalagens",
+    texto: "Dê uma nova utilidade a recipientes limpos antes de descartá-los.",
+  },
+  {
+    titulo: "Recicle o óleo de cozinha",
+    texto: "Guarde o óleo usado em uma garrafa fechada e leve-o a um ponto de coleta apropriado.",
+  },
+  {
+    titulo: "Prefira produtos com menos embalagem",
+    texto: "Ao fazer compras, escolha opções duráveis, refis ou produtos com embalagens recicláveis.",
+  },
+  {
+    titulo: "Use a máquina de lavar cheia",
+    texto: "Espere juntar roupas suficientes para usar a máquina com eficiência e economizar água e energia.",
+  },
+  {
+    titulo: "Faça compostagem dos orgânicos",
+    texto: "Restos de frutas, verduras e borra de café podem virar adubo por meio da compostagem.",
+  },
+  {
+    titulo: "Conserte antes de substituir",
+    texto: "Avalie se roupas, móveis e aparelhos podem ser reparados ou doados antes de comprar novos.",
+  },
+  {
+    titulo: "Leve sua própria caneca",
+    texto: "No trabalho ou em cafeterias, use uma caneca reutilizável em vez de copos descartáveis.",
+  },
+  {
+    titulo: "Escolha alimentos da estação",
+    texto: "Frutas e verduras da estação costumam precisar de menos transporte e armazenamento prolongado.",
+  },
+  {
+    titulo: "Compre somente o necessário",
+    texto: "Faça uma lista antes de ir às compras para evitar excessos e desperdício.",
+  },
+  {
+    titulo: "Aproveite integralmente os alimentos",
+    texto: "Quando apropriado, use talos, cascas e folhas em receitas, sempre depois de higienizá-los.",
+  },
+  {
+    titulo: "Armazene os alimentos corretamente",
+    texto: "Organize a geladeira e identifique sobras para consumi-las antes que estraguem.",
+  },
+  {
+    titulo: "Congele porções que não vai usar",
+    texto: "Congele alimentos antes que estraguem e marque a data para lembrar de consumi-los.",
+  },
+  {
+    titulo: "Prefira produtos locais",
+    texto: "Quando possível, compre de produtores e comércios locais para fortalecer a economia da região.",
+  },
+  {
+    titulo: "Leve recipientes para compras a granel",
+    texto: "Use potes ou sacos reutilizáveis em estabelecimentos que aceitam esse tipo de recipiente.",
+  },
+  {
+    titulo: "Evite talheres descartáveis",
+    texto: "Tenha um conjunto reutilizável na bolsa para refeições fora de casa.",
+  },
+  {
+    titulo: "Recuse brindes que não vai usar",
+    texto: "Antes de aceitar um item promocional, pense se ele será realmente útil para você.",
+  },
+  {
+    titulo: "Prefira pilhas recarregáveis",
+    texto: "Em aparelhos de uso frequente compatíveis, pilhas recarregáveis ajudam a reduzir descartes.",
+  },
+  {
+    titulo: "Descarte pilhas em pontos de coleta",
+    texto: "Não coloque pilhas e baterias no lixo comum; procure um ponto de coleta apropriado.",
+  },
+  {
+    titulo: "Leve eletrônicos antigos para coleta",
+    texto: "Celulares, cabos e aparelhos sem uso devem ser encaminhados a pontos de coleta de eletrônicos.",
+  },
+  {
+    titulo: "Use a impressão frente e verso",
+    texto: "Quando precisar imprimir, use os dois lados do papel sempre que o documento permitir.",
+  },
+  {
+    titulo: "Cuide dos livros que já tem",
+    texto: "Empreste, troque ou doe livros em bom estado para que outras pessoas também possam usá-los.",
+  },
+  {
+    titulo: "Experimente trocar roupas",
+    texto: "Organize uma troca com amigos ou familiares para renovar o guarda-roupa sem comprar peças novas.",
+  },
+  {
+    titulo: "Doe roupas em bom estado",
+    texto: "Encaminhe peças limpas e utilizáveis a instituições ou pessoas que possam aproveitá-las.",
+  },
+  {
+    titulo: "Escolha roupas duráveis",
+    texto: "Ao comprar, avalie a qualidade e se a peça combina com o que você já usa.",
+  },
+  {
+    titulo: "Lave roupas com água fria quando possível",
+    texto: "Confira as etiquetas: muitos tecidos podem ser lavados em água fria, reduzindo o gasto de energia.",
+  },
+  {
+    titulo: "Prefira secar roupas no varal",
+    texto: "Quando o clima e o espaço permitirem, o varal evita o uso da secadora.",
+  },
+  {
+    titulo: "Feche a torneira ao ensaboar a louça",
+    texto: "Deixe a água correr apenas para enxaguar e use uma bacia quando isso ajudar a economizar.",
+  },
+  {
+    titulo: "Conserte vazamentos rapidamente",
+    texto: "Uma torneira pingando pode desperdiçar água; procure consertá-la ou peça ajuda.",
+  },
+  {
+    titulo: "Reaproveite água quando for seguro",
+    texto: "Água limpa usada para lavar frutas pode servir para regar plantas, se não tiver detergente ou contaminantes.",
+  },
+  {
+    titulo: "Regue as plantas nos horários mais frescos",
+    texto: "Regar pela manhã ou no fim da tarde pode reduzir a evaporação em dias quentes.",
+  },
+  {
+    titulo: "Escolha plantas adequadas ao clima local",
+    texto: "Espécies adaptadas à região tendem a exigir cuidados e irrigação mais compatíveis com o ambiente.",
+  },
+  {
+    titulo: "Varra a calçada em vez de usar mangueira",
+    texto: "Para remover folhas e sujeira seca, use uma vassoura e reserve água para quando realmente precisar.",
+  },
+  {
+    titulo: "Tome banhos mais curtos",
+    texto: "Reduzir alguns minutos no banho ajuda a economizar água e a energia usada para aquecê-la.",
+  },
+  {
+    titulo: "Aproveite a luz natural",
+    texto: "Abra cortinas e persianas durante o dia para iluminar os ambientes sem acender lâmpadas.",
+  },
+  {
+    titulo: "Prefira lâmpadas LED",
+    texto: "Ao substituir uma lâmpada, considere uma LED compatível e descarte a antiga corretamente.",
+  },
+  {
+    titulo: "Ative o modo de economia de energia",
+    texto: "Use os recursos de economia de energia do computador e do celular quando forem convenientes.",
+  },
+  {
+    titulo: "Ajuste o ar-condicionado com moderação",
+    texto: "Mantenha portas e janelas fechadas durante o uso e escolha uma temperatura confortável.",
+  },
+  {
+    titulo: "Limpe os filtros do ar-condicionado",
+    texto: "Faça a manutenção conforme as instruções do fabricante para manter o aparelho funcionando bem.",
+  },
+  {
+    titulo: "Prefira ventilação natural quando possível",
+    texto: "Em dias agradáveis, abrir janelas pode arejar a casa sem ligar aparelhos de climatização.",
+  },
+  {
+    titulo: "Cozinhe com a panela tampada",
+    texto: "Manter a panela tampada pode ajudar os alimentos a cozinhar mais rápido e aproveitar melhor o calor.",
+  },
+  {
+    titulo: "Use uma panela do tamanho adequado",
+    texto: "Escolha uma panela compatível com a boca do fogão para evitar desperdício de calor.",
+  },
+  {
+    titulo: "Descongele alimentos na geladeira",
+    texto: "Planeje com antecedência e descongele na geladeira, seguindo boas práticas de segurança alimentar.",
+  },
+  {
+    titulo: "Prefira transporte coletivo",
+    texto: "Em trajetos atendidos e convenientes, ônibus e outros transportes coletivos podem substituir viagens de carro.",
+  },
+  {
+    titulo: "Combine caronas com segurança",
+    texto: "Quando fizer sentido, compartilhe o trajeto com pessoas de confiança e combine os detalhes com antecedência.",
+  },
+  {
+    titulo: "Planeje o trajeto antes de sair",
+    texto: "Agrupe compromissos próximos para evitar deslocamentos repetidos.",
+  },
+  {
+    titulo: "Mantenha os pneus calibrados",
+    texto: "Verifique a pressão recomendada pelo fabricante para dirigir com segurança e eficiência.",
+  },
+  {
+    titulo: "Faça a manutenção preventiva do veículo",
+    texto: "Siga o plano de manutenção do fabricante para conservar o veículo e evitar problemas.",
+  },
+  {
+    titulo: "Evite deixar o carro ligado parado",
+    texto: "Se estiver estacionado por um período, desligue o motor quando for seguro fazê-lo.",
+  },
+  {
+    titulo: "Use a bicicleta com equipamentos adequados",
+    texto: "Em trajetos seguros, use capacete, iluminação e itens de sinalização conforme as regras locais.",
+  },
+  {
+    titulo: "Descarte medicamentos em pontos apropriados",
+    texto: "Leve medicamentos vencidos ou sem uso a farmácias ou pontos que recebam esse tipo de resíduo.",
+  },
+  {
+    titulo: "Não descarte óleo na pia",
+    texto: "O óleo pode entupir tubulações; armazene-o em recipiente fechado e encaminhe para coleta.",
+  },
+  {
+    titulo: "Confira as regras de reciclagem da sua cidade",
+    texto: "A coleta seletiva varia entre municípios; consulte as orientações locais para separar corretamente.",
+  },
+  {
+    titulo: "Entregue embalagens limpas e secas",
+    texto: "Retire restos de alimentos e deixe as embalagens escorrerem antes de colocá-las para reciclagem.",
+  },
+  {
+    titulo: "Achate caixas de papelão",
+    texto: "Desmonte caixas limpas para facilitar o armazenamento e o transporte até a coleta seletiva.",
+  },
+  {
+    titulo: "Reutilize caixas de entrega",
+    texto: "Guarde caixas limpas em bom estado para mudanças, armazenamento ou novos envios.",
+  },
+  {
+    titulo: "Separe resíduos perigosos",
+    texto: "Tintas, solventes e produtos químicos não devem ir ao lixo comum; procure orientação de descarte local.",
+  },
+  {
+    titulo: "Escolha refis quando disponíveis",
+    texto: "Refis podem reduzir embalagens, desde que sejam compatíveis com o produto e usados conforme o rótulo.",
+  },
+  {
+    titulo: "Prefira panos reutilizáveis",
+    texto: "Use panos laváveis em tarefas domésticas quando forem adequados, em vez de papel descartável.",
+  },
+  {
+    titulo: "Leve uma marmita reutilizável",
+    texto: "Use um recipiente próprio para refeições fora de casa e reduza embalagens descartáveis.",
+  },
+  {
+    titulo: "Organize um ponto de reciclagem em casa",
+    texto: "Reserve recipientes identificados para os materiais aceitos pela coleta seletiva local.",
+  },
+  {
+    titulo: "Doe objetos que ainda funcionam",
+    texto: "Antes de descartar um item em bom estado, veja se alguém pode reutilizá-lo.",
+  },
+  {
+    titulo: "Empreste itens usados raramente",
+    texto: "Compartilhe ferramentas e equipamentos com pessoas de confiança quando não precisar usá-los ao mesmo tempo.",
+  },
+  {
+    titulo: "Considere produtos de segunda mão",
+    texto: "Para alguns itens, comprar usado em bom estado prolonga sua vida útil e evita uma compra nova.",
+  },
+  {
+    titulo: "Leve uma sacola para recolher seu lixo",
+    texto: "Em passeios e trilhas, carregue de volta tudo o que levou e descarte corretamente.",
+  },
+  {
+    titulo: "Cuide dos espaços públicos",
+    texto: "Use lixeiras disponíveis e ajude a manter praças, praias e ruas limpas.",
+  },
+  {
+    titulo: "Respeite a fauna e a flora local",
+    texto: "Observe animais e plantas sem tocar, retirar ou alimentar espécies silvestres.",
+  },
+  {
+    titulo: "Prefira produtos de limpeza concentrados",
+    texto: "Quando disponíveis, use produtos concentrados conforme a diluição indicada no rótulo.",
+  },
+  {
+    titulo: "Evite deixar a torneira aberta ao lavar frutas",
+    texto: "Lave os alimentos em uma bacia limpa e use a água com cuidado, conforme necessário.",
+  },
+  {
+    titulo: "Mantenha a geladeira bem organizada",
+    texto: "Guarde cada alimento no local recomendado e evite deixar a porta aberta por muito tempo.",
+  },
+  {
+    titulo: "Prefira eletrodomésticos eficientes",
+    texto: "Na hora de substituir um aparelho, compare o consumo informado na etiqueta de eficiência energética.",
+  },
+  {
+    titulo: "Aproveite a água da chuva com segurança",
+    texto: "Se for captar água, use recipientes cobertos e siga orientações locais; não a consuma sem tratamento adequado.",
+  },
+  {
+    titulo: "Plante espécies nativas",
+    texto: "Consulte especialistas ou viveiros locais para escolher espécies adequadas ao espaço e à região.",
+  },
+  {
+    titulo: "Evite espécies invasoras no jardim",
+    texto: "Antes de plantar, confirme se a espécie é apropriada para a região e não ameaça a biodiversidade local.",
+  },
+  {
+    titulo: "Faça uma horta com o que consome",
+    texto: "Cultive ervas ou hortaliças compatíveis com seu espaço e use água de forma responsável.",
+  },
+  {
+    titulo: "Participe de ações ambientais locais",
+    texto: "Procure mutirões, hortas comunitárias ou iniciativas de educação ambiental na sua região.",
+  },
+  {
+    titulo: "Prefira comprar produtos duráveis",
+    texto: "Antes de comprar, avalie se o item pode ser reparado, reutilizado e se atende a uma necessidade real.",
+  },
+  {
+    titulo: "Evite compras por impulso",
+    texto: "Espere um pouco antes de comprar algo não planejado e avalie se você realmente precisa do item.",
+  },
+  {
+    titulo: "Escolha embalagens retornáveis",
+    texto: "Quando houver um sistema de retorno disponível, devolva a embalagem conforme as instruções do estabelecimento.",
+  },
+  {
+    titulo: "Recicle corretamente o vidro",
+    texto: "Embale cacos com segurança e siga as orientações do serviço local de coleta para evitar acidentes.",
+  },
+  {
+    titulo: "Não misture recicláveis com lixo orgânico",
+    texto: "Separar os materiais desde o início ajuda a reduzir a contaminação dos recicláveis.",
+  },
+  {
+    titulo: "Use filtros reutilizáveis quando adequados",
+    texto: "Em cafeteiras compatíveis, um filtro lavável pode substituir filtros descartáveis.",
+  },
+  {
+    titulo: "Cuide bem dos seus equipamentos",
+    texto: "Limpeza e uso conforme as instruções ajudam a prolongar a vida útil de aparelhos e ferramentas.",
+  },
+  {
+
+    titulo: "Escolha o tamanho certo da embalagem",
+    texto: "Compre quantidades que consiga consumir antes do vencimento para evitar sobras e desperdício.",
+  },
+  {
+    titulo: "Confira a validade antes de comprar",
+    texto: "Verifique se terá tempo de consumir o produto dentro do prazo indicado na embalagem.",
+  },
+  {
+    titulo: "Transforme sobras em novas refeições",
+    texto: "Use a criatividade para reaproveitar sobras armazenadas corretamente e ainda próprias para consumo.",
+  },
+  {
+    titulo: "Use a lava-louças somente com carga completa",
+    texto: "Se você usa lava-louças, aguarde uma carga adequada e siga as orientações de economia do aparelho.",
+  },
+  {
+    titulo: "Lave e reutilize suas sacolas",
+    texto: "Mantenha sacolas reutilizáveis limpas e em bom estado para usá-las por mais tempo.",
+  },
+  {
+    titulo: "Encaminhe tecidos sem condição de uso à coleta",
+    texto: "Procure iniciativas locais que recebam tecidos desgastados para reaproveitamento ou reciclagem.",
+  },
+  {
+    titulo: "Consulte o calendário da coleta seletiva",
+    texto: "Confira os dias e horários da coleta no seu bairro para deixar os recicláveis no momento adequado.",
+  },
+  {
+    titulo: "Reaproveite água enquanto espera o chuveiro aquecer",
+    texto: "Se conseguir coletá-la de forma limpa, use essa água em tarefas como limpeza ou rega.",
+  },
+  {
+    titulo: "Prefira recipientes duráveis para armazenar alimentos",
+    texto: "Potes reutilizáveis ajudam a conservar alimentos e podem substituir embalagens descartáveis.",
+  },
+  {
+    titulo: "Evite descartar resíduos em bueiros",
+    texto: "Jogue o lixo em uma lixeira: resíduos levados pela chuva podem chegar a rios e áreas naturais.",
+  },
+];
+
+function obterDicaDoDia(data = new Date()) {
+  const diaLocal = Date.UTC(
+    data.getFullYear(),
+    data.getMonth(),
+    data.getDate()
+  ) / 86400000;
+  const indice = Math.floor(diaLocal) % dicasSustentaveis.length;
+
+  return {
+    dica: dicasSustentaveis[indice],
+    numero: indice + 1,
+  };
+}
 
 
 function ProgressRing({ size, strokeWidth, progress, color, children }) {
@@ -41,6 +459,23 @@ function ProgressRing({ size, strokeWidth, progress, color, children }) {
 export default function Home({ setScreen }) {
   const [busca, setBusca] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [dataDica, setDataDica] = useState(() => new Date());
+  const { dica, numero: numeroDica } = obterDicaDoDia(dataDica);
+
+  useEffect(() => {
+    const agora = new Date();
+    const amanha = new Date(
+      agora.getFullYear(),
+      agora.getMonth(),
+      agora.getDate() + 1
+    );
+    const temporizador = setTimeout(
+      () => setDataDica(new Date()),
+      amanha.getTime() - agora.getTime()
+    );
+
+    return () => clearTimeout(temporizador);
+  }, [dataDica]);
 
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
@@ -268,18 +703,14 @@ export default function Home({ setScreen }) {
         <View style={[styles.card, styles.dicaCard]}>
           <Ionicons name="leaf-outline" size={26} color="#22c55e" />
           <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.dicaTitle}>Pequenas atitudes fazem uma grande diferença!</Text>
-            <Text style={styles.dicaText}>
-              Prefira produtos reutilizáveis e reduza o consumo de descartáveis.
-            </Text>
+            <Text style={styles.dicaTitle}>{dica.titulo}</Text>
+            <Text style={styles.dicaText}>{dica.texto}</Text>
           </View>
         </View>
 
-        <View style={styles.dots}>
-          <View style={[styles.dot, { backgroundColor: "#22c55e" }]} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
+        <Text style={styles.dicaIndicador}>
+          Dica {numeroDica} de {dicasSustentaveis.length} · atualizada diariamente
+        </Text>
       </View>
     </ScrollView>
     <TabBar active="Home" setScreen={setScreen} />
@@ -691,17 +1122,10 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 
-  dots: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 12,
-  },
-
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#3a3a3a",
-    marginHorizontal: 3,
+  dicaIndicador: {
+    color: "#737373",
+    fontSize: 11,
+    textAlign: "right",
+    marginTop: 10,
   },
 });

@@ -1,6 +1,11 @@
-import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, Switch } from "react-native";
+import { useEffect, useState } from "react";
+import { Alert, View, Text, TextInput, Pressable, StyleSheet, ScrollView, Switch } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  sendPasswordResetEmail,
+} from "firebase/auth";
+import { API_URL } from "../src/services/api";
+import { auth } from "../src/services/firebaseConfig";
 
 const configs = {
   pessoal: { title: "Informações pessoais", icon: "person-outline" },
@@ -16,13 +21,24 @@ const configs = {
   impacto: { title: "Relatório de impacto", icon: "leaf-outline" },
 };
 
-export default function PerfilConfiguracao({ setScreen, type }) {
+export default function PerfilConfiguracao({
+  setScreen,
+  type,
+  usuario,
+  dadosUsuario,
+  setDadosUsuario,
+  carregandoPerfil,
+  erroPerfil,
+  onRetry,
+}) {
   const config = configs[type] || configs.pessoal;
-  const [nome, setNome] = useState("Lucas Oliveira S.");
-  const [email, setEmail] = useState("lucas.oliveira.ss@gmail.com");
-  const [telefone, setTelefone] = useState("(51) 99999-9999");
-  const [senhaAtual, setSenhaAtual] = useState("");
-  const [novaSenha, setNovaSenha] = useState("");
+  const [nome, setNome] = useState("");
+  const [email, setEmail] = useState("");
+  const [cep, setCep] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [enviandoLinkSenha, setEnviandoLinkSenha] = useState(false);
   const [notificacoes, setNotificacoes] = useState(true);
   const [emailNotificacoes, setEmailNotificacoes] = useState(true);
   const [alertasColeta, setAlertasColeta] = useState(true);
@@ -33,6 +49,106 @@ export default function PerfilConfiguracao({ setScreen, type }) {
   const [textoMaior, setTextoMaior] = useState(false);
   const [reduzirAnimacoes, setReduzirAnimacoes] = useState(false);
   const [idioma, setIdioma] = useState("Português (Brasil)");
+
+  useEffect(() => {
+    if (!dadosUsuario) {
+      return;
+    }
+
+    setNome(dadosUsuario.nome_completo || "");
+    setEmail(usuario?.email || dadosUsuario.email || "");
+    setCep(dadosUsuario.cep || "");
+    setEndereco(dadosUsuario.endereco || "");
+    setTelefone(dadosUsuario.telefone || "");
+  }, [dadosUsuario, usuario?.email]);
+
+  async function enviarLinkAlteracaoSenha() {
+    const emailConta = auth.currentUser?.email || usuario?.email;
+
+    if (!emailConta) {
+      Alert.alert(
+        "E-mail indisponível",
+        "Não encontramos um e-mail associado à sua conta. Faça login novamente."
+      );
+      return;
+    }
+
+    setEnviandoLinkSenha(true);
+
+    try {
+      await sendPasswordResetEmail(auth, emailConta);
+      Alert.alert(
+        "Verifique seu e-mail",
+        `Enviamos um link de redefinição para ${emailConta}. Abra-o para escolher uma nova senha.`
+      );
+    } catch (error) {
+      console.error("Erro ao enviar link para alteração de senha:", error);
+
+      const mensagens = {
+        "auth/invalid-email": "O e-mail associado à conta é inválido.",
+        "auth/too-many-requests": "Muitas tentativas. Tente novamente mais tarde.",
+        "auth/operation-not-allowed": "A redefinição de senha não está habilitada no Firebase.",
+      };
+
+      Alert.alert(
+        "Não foi possível enviar o link",
+        mensagens[error.code] || "Verifique sua conexão e tente novamente."
+      );
+    } finally {
+      setEnviandoLinkSenha(false);
+    }
+  }
+
+  async function salvarDadosPessoais() {
+    if (!nome.trim() || !cep.trim() || !telefone.trim() || !dadosUsuario?.cpf) {
+      Alert.alert("Atenção", "Preencha os campos obrigatórios.");
+      return;
+    }
+
+    setSalvando(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/usuarios/firebase/${encodeURIComponent(usuario.uid)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            nome_completo: nome.trim(),
+            cep: cep.trim(),
+            endereco: endereco.trim(),
+            telefone: telefone.trim(),
+            cpf: dadosUsuario.cpf,
+            aceitou_termos: dadosUsuario.aceitou_termos,
+            deseja_notificacoes: dadosUsuario.deseja_notificacoes,
+          }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.mensagem || "Não foi possível atualizar seus dados.");
+      }
+
+      setDadosUsuario({
+        ...dadosUsuario,
+        nome_completo: nome.trim(),
+        cep: cep.trim(),
+        endereco: endereco.trim(),
+        telefone: telefone.trim(),
+      });
+      Alert.alert("Sucesso", "Seus dados foram atualizados.");
+      setScreen("MeuPerfil");
+    } catch (error) {
+      console.error("Erro ao atualizar dados do perfil:", error);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível atualizar seus dados."
+      );
+    } finally {
+      setSalvando(false);
+    }
+  }
 
   function renderSwitch(label, value, onValueChange, description) {
     return (
@@ -53,30 +169,57 @@ export default function PerfilConfiguracao({ setScreen, type }) {
 
   function renderContent() {
     if (type === "pessoal") {
+      if (carregandoPerfil) {
+        return <Text style={styles.intro}>Carregando seus dados...</Text>;
+      }
+
+      if (erroPerfil || !dadosUsuario) {
+        return <>
+          <Text style={styles.intro}>
+            {erroPerfil || "Não foi possível carregar seus dados."}
+          </Text>
+          <SaveButton label="Tentar novamente" onPress={onRetry} />
+        </>;
+      }
+
       return <>
         <Text style={styles.intro}>Atualize seus dados para manter sua conta sempre correta.</Text>
         <Text style={styles.label}>Nome completo</Text>
         <TextInput value={nome} onChangeText={setNome} style={styles.input} placeholderTextColor="#8a8a8a" />
-        <Text style={styles.label}>E-mail</Text>
-        <TextInput value={email} onChangeText={setEmail} keyboardType="email-address" style={styles.input} placeholderTextColor="#8a8a8a" />
+        <Text style={styles.label}>E-mail atual</Text>
+        <TextInput value={email} editable={false} keyboardType="email-address" style={styles.input} placeholderTextColor="#8a8a8a" />
         <Text style={styles.label}>Telefone</Text>
         <TextInput value={telefone} onChangeText={setTelefone} keyboardType="phone-pad" style={styles.input} placeholderTextColor="#8a8a8a" />
+        <Text style={styles.label}>CEP</Text>
+        <TextInput value={cep} onChangeText={setCep} keyboardType="numeric" style={styles.input} placeholderTextColor="#8a8a8a" />
         <Text style={styles.label}>Endereço</Text>
-        <TextInput defaultValue="Rua São João, 567 - Schariau" style={styles.input} placeholderTextColor="#8a8a8a" />
-        <SaveButton label="Salvar alterações" onPress={() => setScreen("MeuPerfil")} />
+        <TextInput value={endereco} onChangeText={setEndereco} style={styles.input} placeholderTextColor="#8a8a8a" />
+        <SaveButton
+          label={salvando ? "Salvando..." : "Salvar alterações"}
+          onPress={salvarDadosPessoais}
+          disabled={salvando}
+        />
       </>;
     }
 
     if (type === "seguranca") {
       return <>
-        <Text style={styles.intro}>Mantenha sua senha atualizada para proteger sua conta.</Text>
-        <Text style={styles.label}>Senha atual</Text>
-        <TextInput value={senhaAtual} onChangeText={setSenhaAtual} secureTextEntry style={styles.input} placeholder="Digite sua senha atual" placeholderTextColor="#8a8a8a" />
-        <Text style={styles.label}>Nova senha</Text>
-        <TextInput value={novaSenha} onChangeText={setNovaSenha} secureTextEntry style={styles.input} placeholder="Digite uma nova senha" placeholderTextColor="#8a8a8a" />
-        <Text style={styles.label}>Confirmar nova senha</Text>
-        <TextInput secureTextEntry style={styles.input} placeholder="Repita a nova senha" placeholderTextColor="#8a8a8a" />
-        <SaveButton label="Alterar senha" onPress={() => setScreen("MeuPerfil")} />
+        <Text style={styles.intro}>
+          Para proteger sua conta, enviaremos um link para o e-mail associado. Abra o link para escolher uma nova senha.
+        </Text>
+        <Text style={styles.label}>E-mail da conta</Text>
+        <TextInput
+          value={auth.currentUser?.email || usuario?.email || ""}
+          editable={false}
+          keyboardType="email-address"
+          style={styles.input}
+          placeholderTextColor="#8a8a8a"
+        />
+        <SaveButton
+          label={enviandoLinkSenha ? "Enviando link..." : "Enviar link para trocar senha"}
+          onPress={enviarLinkAlteracaoSenha}
+          disabled={enviandoLinkSenha}
+        />
       </>;
     }
 
@@ -153,8 +296,8 @@ export default function PerfilConfiguracao({ setScreen, type }) {
   );
 }
 
-function SaveButton({ label, onPress }) {
-  return <Pressable style={styles.saveButton} onPress={onPress}><Text style={styles.saveButtonText}>{label}</Text></Pressable>;
+function SaveButton({ label, onPress, disabled = false }) {
+  return <Pressable style={[styles.saveButton, disabled && styles.saveButtonDisabled]} onPress={onPress} disabled={disabled}><Text style={styles.saveButtonText}>{label}</Text></Pressable>;
 }
 
 function Choice({ label, selected, onPress }) {
@@ -177,6 +320,7 @@ const styles = StyleSheet.create({
   label: { color: "#e5e5e5", fontSize: 13, fontWeight: "bold", marginBottom: 8 },
   input: { width: "100%", color: "#e5e5e5", backgroundColor: "#161616", borderWidth: 1, borderColor: "#3a3a3a", borderRadius: 10, padding: 14, marginBottom: 18 },
   saveButton: { backgroundColor: "#22c55e", borderRadius: 10, paddingVertical: 14, alignItems: "center", marginTop: 8 },
+  saveButtonDisabled: { opacity: 0.6 },
   saveButtonText: { color: "#000", fontWeight: "bold", fontSize: 14 },
   optionRow: { backgroundColor: "#161616", borderWidth: 1, borderColor: "#3a3a3a", borderRadius: 12, padding: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   optionText: { flex: 1, paddingRight: 14 },
