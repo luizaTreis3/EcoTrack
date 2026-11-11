@@ -16,6 +16,19 @@ atualizar o registro no banco:
 UPDATE relatos SET status = 'Resolvido' WHERE id_relato = ?;
 ```
 
+## Imagens de perfil e relatos
+
+Antes de iniciar o backend com o suporte à foto de perfil, aplique uma vez a
+migração [002_add_profile_image.sql](./migrations/002_add_profile_image.sql)
+no banco `ecotrack`. As imagens são salvas localmente em `backend/uploads` e
+servidas pelo backend; o banco guarda somente o caminho do arquivo. O diretório
+é criado automaticamente, e cada imagem pode ter até 5 MB.
+
+Esse método não usa Firebase Storage nem cobra por armazenamento em nuvem, mas
+consome o disco da máquina que executa o backend. Em uma hospedagem, configure
+um volume persistente para `backend/uploads`; sem isso, as imagens podem ser
+perdidas quando o servidor reiniciar ou for publicado novamente.
+
 Password reset messages are sent by Firebase Authentication. Their links use
 Firebase's hosted action handler and one-time, expiring action codes; this API
 does not generate or store password reset tokens. Configure the Password reset

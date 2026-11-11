@@ -2,12 +2,160 @@ const express = require("express");
 const cors = require("cors");
 const db = require("./dbconfig");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const multer = require("multer");
 
 const app = express();
 const port = process.env.PORT || 3000;
+const uploadsDirectory = path.join(__dirname, "uploads");
+const imageExtensions = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/heic": "heic",
+    "image/heif": "heif"
+};
+
+fs.mkdirSync(uploadsDirectory, { recursive: true });
+
+const imageUpload = multer({
+    storage: multer.diskStorage({
+        destination: uploadsDirectory,
+        filename: (req, file, callback) => {
+            callback(
+                null,
+                `${crypto.randomUUID()}.${imageExtensions[file.mimetype]}`
+            );
+        }
+    }),
+    limits: {
+        fileSize: 5 * 1024 * 1024,
+        files: 1,
+        fields: 12,
+        parts: 13,
+        fieldSize: 16 * 1024
+    },
+    fileFilter: (req, file, callback) => {
+        if (!Object.prototype.hasOwnProperty.call(imageExtensions, file.mimetype)) {
+            return callback(new Error("Use uma imagem em formato compatível."));
+        }
+
+        return callback(null, true);
+    }
+});
+
+function isValidImageSignature(buffer, mimeType) {
+    if (mimeType === "image/jpeg") {
+        return buffer.length >= 3
+            && buffer[0] === 0xff
+            && buffer[1] === 0xd8
+            && buffer[2] === 0xff;
+    }
+
+    if (mimeType === "image/png") {
+        return buffer.length >= 8
+            && buffer.subarray(0, 8).equals(Buffer.from("89504e470d0a1a0a", "hex"));
+    }
+
+    if (mimeType === "image/webp") {
+        return buffer.length >= 12
+            && buffer.toString("ascii", 0, 4) === "RIFF"
+            && buffer.toString("ascii", 8, 12) === "WEBP";
+    }
+
+    if (mimeType === "image/gif") {
+        const signature = buffer.toString("ascii", 0, 6);
+        return signature === "GIF87a" || signature === "GIF89a";
+    }
+
+    if (mimeType === "image/heic" || mimeType === "image/heif") {
+        const brand = buffer.toString("ascii", 8, 12);
+        return buffer.length >= 12
+            && buffer.toString("ascii", 4, 8) === "ftyp"
+            && ["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(brand);
+    }
+
+    return false;
+}
+
+function removeUploadedFile(file, callback) {
+    if (!file?.path) {
+        callback();
+        return;
+    }
+
+    fs.unlink(file.path, (error) => {
+        if (error && error.code !== "ENOENT") {
+            console.error("Erro ao remover arquivo enviado:", error);
+        }
+        callback();
+    });
+}
+
+function removeStoredImage(imagePath) {
+    if (typeof imagePath !== "string" || !imagePath.startsWith("/uploads/")) {
+        return;
+    }
+
+    const fileName = imagePath.slice("/uploads/".length);
+    if (!fileName || path.basename(fileName) !== fileName) {
+        return;
+    }
+
+    fs.unlink(path.join(uploadsDirectory, fileName), (error) => {
+        if (error && error.code !== "ENOENT") {
+            console.error("Erro ao remover imagem armazenada:", error);
+        }
+    });
+}
+
+function receiveImage(req, res, next) {
+    imageUpload.single("imagem")(req, res, (error) => {
+        if (error) {
+            const tamanhoExcedido =
+                error instanceof multer.MulterError
+                && error.code === "LIMIT_FILE_SIZE";
+            console.error("Erro ao receber imagem:", error);
+            return res.status(tamanhoExcedido ? 413 : 400).json({
+                mensagem: tamanhoExcedido
+                    ? "A imagem deve ter no máximo 5 MB."
+                    : error.message || "Não foi possível receber a imagem."
+            });
+        }
+
+        if (!req.file) {
+            return next();
+        }
+
+        fs.readFile(req.file.path, (readError, contents) => {
+            if (readError) {
+                console.error("Erro ao validar imagem enviada:", readError);
+                return removeUploadedFile(req.file, () => res.status(500).json({
+                    mensagem: "Não foi possível validar a imagem."
+                }));
+            }
+
+            if (!isValidImageSignature(contents, req.file.mimetype)) {
+                return removeUploadedFile(req.file, () => res.status(400).json({
+                    mensagem: "O arquivo enviado não é uma imagem válida."
+                }));
+            }
+
+            return next();
+        });
+    });
+}
 
 app.use(cors());
 app.use(express.json()); 
+app.use("/uploads", express.static(uploadsDirectory, {
+    setHeaders: (res) => {
+        res.setHeader("X-Content-Type-Options", "nosniff");
+    }
+}));
 
 app.post("/usuarios", async (req, res) => {
     const {
@@ -112,6 +260,7 @@ app.get("/usuarios/firebase/:uid", (req, res) => {
             endereco,
             telefone,
             cpf,
+            imagem_perfil,
             aceitou_termos,
             deseja_notificacoes,
             data_cadastro
@@ -141,7 +290,7 @@ app.get("/usuarios/firebase/:uid", (req, res) => {
 
 
 // ATUALIZAR DADOS DO USUÁRIO PELO UID DO FIREBASE
-app.put("/usuarios/firebase/:uid", (req, res) => {
+app.put("/usuarios/firebase/:uid", receiveImage, (req, res) => {
     const { uid } = req.params;
 
     const {
@@ -155,10 +304,14 @@ app.put("/usuarios/firebase/:uid", (req, res) => {
     } = req.body;
 
     if (!nome_completo || !cep || !telefone || !cpf) {
-        return res.status(400).json({
+        return removeUploadedFile(req.file, () => res.status(400).json({
             mensagem: "Preencha todos os campos obrigatórios."
-        });
+        }));
     }
+
+    const imagemPerfil = req.file
+        ? `/uploads/${req.file.filename}`
+        : null;
 
     const sql = `
         UPDATE usuarios
@@ -168,6 +321,7 @@ app.put("/usuarios/firebase/:uid", (req, res) => {
             endereco = ?,
             telefone = ?,
             cpf = ?,
+            imagem_perfil = COALESCE(?, imagem_perfil),
             aceitou_termos = ?,
             deseja_notificacoes = ?
         WHERE firebase_uid = ?
@@ -179,36 +333,62 @@ app.put("/usuarios/firebase/:uid", (req, res) => {
         endereco || null,
         telefone,
         cpf,
+        imagemPerfil,
         aceitou_termos,
         deseja_notificacoes,
         uid
     ];
 
-    db.query(sql, valores, (err, result) => {
-        if (err) {
-            console.error("Erro ao atualizar usuário:", err);
-
-            if (err.code === "ER_DUP_ENTRY") {
-                return res.status(400).json({
-                    mensagem: "Este CPF já está cadastrado."
-                });
+    db.query(
+        "SELECT imagem_perfil FROM usuarios WHERE firebase_uid = ?",
+        [uid],
+        (lookupErr, users) => {
+            if (lookupErr) {
+                console.error("Erro ao buscar usuário antes de atualizar:", lookupErr);
+                return removeUploadedFile(req.file, () => res.status(500).json({
+                    mensagem: "Erro ao atualizar usuário."
+                }));
             }
 
-            return res.status(500).json({
-                mensagem: "Erro ao atualizar usuário."
+            if (users.length === 0) {
+                return removeUploadedFile(req.file, () => res.status(404).json({
+                    mensagem: "Usuário não encontrado."
+                }));
+            }
+
+            db.query(sql, valores, (err, result) => {
+                if (err) {
+                    console.error("Erro ao atualizar usuário:", err);
+
+                    if (err.code === "ER_DUP_ENTRY") {
+                        return removeUploadedFile(req.file, () => res.status(400).json({
+                            mensagem: "Este CPF já está cadastrado."
+                        }));
+                    }
+
+                    return removeUploadedFile(req.file, () => res.status(500).json({
+                        mensagem: "Erro ao atualizar usuário."
+                    }));
+                }
+
+                if (result.affectedRows === 0) {
+                    return removeUploadedFile(req.file, () => res.status(404).json({
+                        mensagem: "Usuário não encontrado."
+                    }));
+                }
+
+                const imagemAnterior = users[0].imagem_perfil;
+                if (imagemPerfil && imagemAnterior !== imagemPerfil) {
+                    removeStoredImage(imagemAnterior);
+                }
+
+                return res.status(200).json({
+                    mensagem: "Dados atualizados com sucesso!",
+                    imagem_perfil: imagemPerfil || imagemAnterior || null
+                });
             });
         }
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({
-                mensagem: "Usuário não encontrado."
-            });
-        }
-
-        return res.status(200).json({
-            mensagem: "Dados atualizados com sucesso!"
-        });
-    });
+    );
 });
 
 app.post("/login", async (req, res) => {
@@ -881,7 +1061,7 @@ app.get("/relatos/:id", (req, res) => {
     });
 });
 
-app.post("/relatos", (req, res) => {
+app.post("/relatos", receiveImage, (req, res) => {
     const {
         id_usuario,
         titulo,
@@ -895,17 +1075,21 @@ app.post("/relatos", (req, res) => {
 
     // Verifica o ID do usuário
     if (!id_usuario) {
-        return res.status(400).json({
+        return removeUploadedFile(req.file, () => res.status(400).json({
             mensagem: "Usuário não identificado."
-        });
+        }));
     }
 
     // Verifica os campos obrigatórios
     if (!titulo || !bairro || !endereco || !categoria || !descricao) {
-        return res.status(400).json({
+        return removeUploadedFile(req.file, () => res.status(400).json({
             mensagem: "Preencha os campos obrigatórios: título, bairro, endereço, categoria e descrição."
-        });
+        }));
     }
+
+    const imagemRelato = req.file
+        ? `/uploads/${req.file.filename}`
+        : imagem || null;
 
     const sql = `
         INSERT INTO relatos
@@ -930,7 +1114,7 @@ app.post("/relatos", (req, res) => {
         endereco,
         categoria,
         descricao,
-        imagem || null,
+        imagemRelato,
         atualizar_status || false
     ];
 
@@ -940,20 +1124,21 @@ app.post("/relatos", (req, res) => {
 
             // Usuário não existe na tabela usuarios
             if (err.code === "ER_NO_REFERENCED_ROW_2") {
-                return res.status(400).json({
+                return removeUploadedFile(req.file, () => res.status(400).json({
                     mensagem: "O usuário informado não existe."
-                });
+                }));
             }
 
-            return res.status(500).json({
+            return removeUploadedFile(req.file, () => res.status(500).json({
                 mensagem: "Erro ao cadastrar relato."
-            });
+            }));
         }
 
         res.status(201).json({
             mensagem: "Relato cadastrado com sucesso!",
             id_relato: result.insertId,
             id_usuario: id_usuario,
+            imagem: imagemRelato,
             status: "Pendente"
         });
     });
@@ -1026,30 +1211,48 @@ app.put("/relatos/:id", (req, res) => {
 app.delete("/relatos/:id", (req, res) => {
     const { id } = req.params;
 
-    const sql = `
-        DELETE FROM relatos
-        WHERE id_relato = ?
-    `;
+    db.query(
+        "SELECT imagem FROM relatos WHERE id_relato = ?",
+        [id],
+        (lookupErr, relatos) => {
+            if (lookupErr) {
+                console.error("Erro ao buscar imagem do relato:", lookupErr);
+                return res.status(500).json({
+                    mensagem: "Erro ao excluir relato."
+                });
+            }
 
-    db.query(sql, [id], (err, result) => {
-        if (err) {
-            console.error("Erro ao excluir relato:", err);
+            if (relatos.length === 0) {
+                return res.status(404).json({
+                    mensagem: "Relato não encontrado."
+                });
+            }
 
-            return res.status(500).json({
-                mensagem: "Erro ao excluir relato."
-            });
+            db.query(
+                "DELETE FROM relatos WHERE id_relato = ?",
+                [id],
+                (err, result) => {
+                    if (err) {
+                        console.error("Erro ao excluir relato:", err);
+                        return res.status(500).json({
+                            mensagem: "Erro ao excluir relato."
+                        });
+                    }
+
+                    if (result.affectedRows === 0) {
+                        return res.status(404).json({
+                            mensagem: "Relato não encontrado."
+                        });
+                    }
+
+                    removeStoredImage(relatos[0].imagem);
+                    return res.status(200).json({
+                        mensagem: "Relato excluído com sucesso!"
+                    });
+                }
+            );
         }
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({
-                mensagem: "Relato não encontrado."
-            });
-        }
-
-        res.status(200).json({
-            mensagem: "Relato excluído com sucesso!"
-        });
-    });
+    );
 });
 
 app.listen(port, () => {
