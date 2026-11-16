@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import {
+  Alert,
   Image,
+  Linking,
+  Modal,
   View,
   Text,
   Pressable,
@@ -12,19 +15,96 @@ import { Ionicons } from "@expo/vector-icons";
 import TabBar from "./TabBar";
 import { API_URL } from "../src/services/api";
 import { getImageUrl } from "../src/services/imageStorage";
+import { scheduleTestNotification } from "../src/services/localNotifications";
 
-export default function Infos({
-  setScreen,
-  dadosUsuario,
-  carregandoPerfil,
-  erroPerfil,
+export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroPerfil,
 }) {
   const [categoriaAtiva, setCategoriaAtiva] = useState("Todas");
-  const [diaAtivo, setDiaAtivo] = useState("Seg");
   const [menuOpen, setMenuOpen] = useState(false);
   const [relatos, setRelatos] = useState([]);
+  const [relatoSelecionado, setRelatoSelecionado] = useState(null);
   const [carregandoRelatos, setCarregandoRelatos] = useState(false);
   const [erroRelatos, setErroRelatos] = useState("");
+  const [pontosColeta, setPontosColeta] = useState([]);
+  const [carregandoPontos, setCarregandoPontos] = useState(false);
+  const [erroPontos, setErroPontos] = useState("");
+  const [erroAcompanhamento, setErroAcompanhamento] = useState("");
+  const [buscaPonto, setBuscaPonto] = useState("");
+  const [pontoAtualizando, setPontoAtualizando] = useState(null);
+  const [testandoNotificacao, setTestandoNotificacao] = useState(false);
+  const [bairroColeta, setBairroColeta] = useState("");
+  const [bairroDigitado, setBairroDigitado] = useState("");
+  const [salvandoBairro, setSalvandoBairro] = useState(false);
+  const [agendasColeta, setAgendasColeta] = useState([]);
+  const [carregandoAgenda, setCarregandoAgenda] = useState(false);
+  const [erroAgenda, setErroAgenda] = useState("");
+
+  useEffect(() => {
+    const bairroSalvo = dadosUsuario?.bairro_coleta || "";
+    setBairroColeta(bairroSalvo);
+    setBairroDigitado(bairroSalvo);
+  }, [dadosUsuario?.id_usuario, dadosUsuario?.bairro_coleta]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function carregarAgenda() {
+      if (!bairroColeta) {
+        setAgendasColeta([]);
+        setErroAgenda("");
+        return;
+      }
+
+      setCarregandoAgenda(true);
+      setErroAgenda("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/coleta-seletiva?bairro=${encodeURIComponent(bairroColeta)}`
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.mensagem || "Não foi possível carregar o cronograma.");
+        }
+
+        if (ativo) {
+          setAgendasColeta(Array.isArray(data.agendas) ? data.agendas : []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar cronograma da coleta:", error);
+        if (ativo) {
+          setErroAgenda(error.message || "Não foi possível carregar o cronograma.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoAgenda(false);
+        }
+      }
+    }
+
+    carregarAgenda();
+
+    return () => {
+      ativo = false;
+    };
+  }, [bairroColeta]);
+
+  async function testarNotificacaoLocal() {
+    setTestandoNotificacao(true);
+
+    try {
+      await scheduleTestNotification();
+    } catch (error) {
+      console.error("Erro ao testar notificação local:", error);
+      Alert.alert(
+        "Não foi possível enviar a notificação",
+        error.message || "Verifique a permissão de notificações e tente novamente."
+      );
+    } finally {
+      setTestandoNotificacao(false);
+    }
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -84,11 +164,134 @@ export default function Infos({
     };
   }, [dadosUsuario?.id_usuario]);
 
+  useEffect(() => {
+    let ativo = true;
+    const idUsuario = dadosUsuario?.id_usuario;
+
+    async function carregarPontosColeta() {
+      setCarregandoPontos(true);
+      setErroPontos("");
+
+      try {
+        const query = idUsuario
+          ? `?id_usuario=${encodeURIComponent(idUsuario)}`
+          : "";
+        const response = await fetch(`${API_URL}/pontos-coleta${query}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.mensagem || "Não foi possível carregar os pontos de entrega.");
+        }
+
+        if (ativo) {
+          setPontosColeta(Array.isArray(data.pontos) ? data.pontos : []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar pontos de coleta:", error);
+        if (ativo) {
+          setErroPontos(error.message || "Não foi possível carregar os pontos de entrega.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoPontos(false);
+        }
+      }
+    }
+
+    carregarPontosColeta();
+
+    return () => {
+      ativo = false;
+    };
+  }, [dadosUsuario?.id_usuario]);
+
+  async function salvarBairroColeta() {
+    const idUsuario = dadosUsuario?.id_usuario;
+    const bairro = bairroDigitado.trim();
+
+    if (!idUsuario) {
+      Alert.alert("Atenção", "Entre na sua conta para salvar o bairro da coleta.");
+      return;
+    }
+    if (!bairro) {
+      setErroAgenda("Informe o bairro da sua residência.");
+      return;
+    }
+    if (bairro.length > 100) {
+      setErroAgenda("O bairro deve ter no máximo 100 caracteres.");
+      return;
+    }
+
+    setSalvandoBairro(true);
+    setErroAgenda("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/usuarios/${encodeURIComponent(idUsuario)}/bairro-coleta`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bairro_coleta: bairro }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.mensagem || "Não foi possível salvar seu bairro.");
+      }
+
+      setBairroColeta(data.bairro_coleta || bairro);
+    } catch (error) {
+      console.error("Erro ao salvar bairro da coleta:", error);
+      setErroAgenda(error.message || "Não foi possível salvar seu bairro.");
+    } finally {
+      setSalvandoBairro(false);
+    }
+  }
+
+  async function alterarAcompanhamento(ponto) {
+    const idUsuario = dadosUsuario?.id_usuario;
+    if (!idUsuario) {
+      Alert.alert("Atenção", "Entre na sua conta para acompanhar pontos de entrega.");
+      return;
+    }
+
+    setPontoAtualizando(ponto.id_ponto);
+    setErroAcompanhamento("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/usuarios/${encodeURIComponent(idUsuario)}`
+          + `/pontos-coleta/${encodeURIComponent(ponto.id_ponto)}/acompanhamento`,
+        { method: ponto.acompanhando ? "DELETE" : "PUT" }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.mensagem || "Não foi possível atualizar o acompanhamento.");
+      }
+
+      setPontosColeta((anteriores) =>
+        anteriores.map((item) =>
+          String(item.id_ponto) === String(ponto.id_ponto)
+            ? { ...item, acompanhando: !ponto.acompanhando }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Erro ao atualizar acompanhamento do ponto:", error);
+      setErroAcompanhamento(error.message || "Não foi possível atualizar o acompanhamento.");
+    } finally {
+      setPontoAtualizando(null);
+    }
+  }
+
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
     { label: "Desafios", screen: "Desafios", icon: "trophy-outline" },
     { label: "Relato", screen: "CriarRelato", icon: "create-outline" },
+    { label: "Notificações", screen: "Notificacoes", icon: "notifications-outline" },
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
 
@@ -102,24 +305,11 @@ export default function Infos({
     { nome: "Perigoso", icon: "warning-outline", qtd: 2, color: "#f97316" },
   ];
 
-  const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-  const bairros = [
-    { nome: "Campestre", turno: "Coleta nos turnos", badge: "Manhã e Tarde" },
-    { nome: "Vila nova", turno: "Coleta no turno", badge: "Manhã" },
-    { nome: "Feitoria Seller", turno: "Coleta nos turnos", badge: "Manhã e Tarde" },
-    { nome: "Bairro Independência", turno: "Coleta no turno", badge: "Tarde" },
-    { nome: "Duque de Caxias", turno: "Coleta no turno", badge: "Tarde" },
-  ];
-
-  const materiais = [
-    { nome: "Orgânico", icon: "leaf-outline" },
-    { nome: "Papel", icon: "document-text-outline" },
-    { nome: "Plástico", icon: "flask-outline" },
-    { nome: "Vidro", icon: "wine-outline" },
-    { nome: "Metal", icon: "hardware-chip-outline" },
-    { nome: "Perigoso", icon: "warning-outline" },
-  ];
+  const pontosFiltrados = pontosColeta.filter((ponto) =>
+    `${ponto.nome} ${ponto.endereco} ${ponto.tipo_residuo}`
+      .toLowerCase()
+      .includes(buscaPonto.trim().toLowerCase())
+  );
 
   return (
     <View style={styles.container}>
@@ -160,11 +350,39 @@ export default function Infos({
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        nestedScrollEnabled
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.subtitle}>
           Tudo o que você precisa para cuidar da cidade
         </Text>
+
+        <View style={styles.notificationTestCard}>
+          <View style={styles.notificationTestText}>
+            <Text style={styles.notificationTestTitle}>Testar notificações</Text>
+            <Text style={styles.mapDescription}>
+              Envia uma notificação local de teste para este dispositivo.
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Enviar notificação local de teste"
+            disabled={testandoNotificacao}
+            onPress={testarNotificacaoLocal}
+            style={[
+              styles.notificationTestButton,
+              testandoNotificacao && styles.notificationTestButtonDisabled,
+            ]}
+          >
+            <Ionicons name="notifications-outline" size={18} color="#0b0b0b" />
+            <Text style={styles.notificationTestButtonText}>
+              {testandoNotificacao ? "Enviando..." : "Testar"}
+            </Text>
+          </Pressable>
+        </View>
 
         {/* Card do mapa */}
         <View style={styles.mapCard}>
@@ -199,6 +417,8 @@ export default function Infos({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          directionalLockEnabled
           style={{ marginBottom: 28 }}
         >
           {categorias.map((cat, index) => (
@@ -281,7 +501,13 @@ export default function Infos({
           };
 
           return (
-          <Pressable key={item.id_relato} style={styles.relatoCard}>
+          <Pressable
+            key={item.id_relato}
+            style={styles.relatoCard}
+            onPress={() => setRelatoSelecionado(item)}
+            accessibilityRole="button"
+            accessibilityLabel={`Ver detalhes do relato: ${item.titulo}`}
+          >
             {item.imagem ? (
               <RelatoImage caminho={item.imagem} />
             ) : (
@@ -315,154 +541,280 @@ export default function Infos({
                   {item.status || "Pendente"}
                 </Text>
               </View>
+              <Text style={styles.verRelatoText}>Ver relato</Text>
               <Ionicons name="chevron-forward" size={16} color="#8a8a8a" style={{ marginTop: 8 }} />
             </View>
           </Pressable>
           );
         })}
 
-        {/* Coleta Seletiva */}
-        <Text style={styles.sectionTitle}>Coleta Seletiva</Text>
+        <Text style={styles.sectionTitle}>Coleta seletiva por bairro</Text>
         <Text style={styles.mapDescription}>
-          Consulte os dias e horários da coleta no seu bairro.
+          Informe seu bairro para consultar os dias, turnos e cooperativas da rota mais próxima.
         </Text>
+
+        <View style={styles.bairroColetaRow}>
+          <TextInput
+            value={bairroDigitado}
+            onChangeText={setBairroDigitado}
+            placeholder="Ex.: Campestre, Centro ou Feitoria"
+            placeholderTextColor="#8a8a8a"
+            style={styles.bairroColetaInput}
+            maxLength={100}
+            editable={!salvandoBairro}
+          />
+          <Pressable
+            onPress={salvarBairroColeta}
+            disabled={salvandoBairro}
+            style={[
+              styles.bairroColetaButton,
+              salvandoBairro && styles.bairroColetaButtonDisabled,
+            ]}
+          >
+            <Text style={styles.bairroColetaButtonText}>
+              {salvandoBairro ? "Salvando..." : "Salvar"}
+            </Text>
+          </Pressable>
+        </View>
+
+        <Pressable
+          style={[styles.sourceLink, styles.coletaSourceLink]}
+          onPress={() =>
+            Linking.openURL("https://www.saoleopoldo.rs.gov.br/conteudo/4303/1/1722?titulo=COLETA+SELETIVA")
+              .catch((error) => {
+                console.error("Erro ao abrir a fonte municipal da coleta:", error);
+                Alert.alert("Erro", "Não foi possível abrir a página da Prefeitura.");
+              })
+          }
+        >
+          <Ionicons name="open-outline" size={15} color="#22c55e" />
+          <Text style={styles.sourceLinkText}>Fonte municipal da coleta seletiva</Text>
+        </Pressable>
+
+        {erroAgenda ? (
+          <Text style={styles.relatoError}>{erroAgenda}</Text>
+        ) : null}
+        {carregandoAgenda ? (
+          <Text style={styles.relatoEmpty}>Buscando os dias de coleta...</Text>
+        ) : bairroColeta && !erroAgenda && agendasColeta.length === 0 ? (
+          <Text style={styles.relatoEmpty}>
+            Não encontramos esse bairro no cronograma. Confira a grafia ou consulte a fonte municipal.
+          </Text>
+        ) : (
+          agendasColeta.map((agenda) => (
+            <View key={agenda.id_agenda} style={styles.agendaCard}>
+              <View style={styles.agendaHeader}>
+                <View style={styles.agendaIcon}>
+                  <Ionicons name="calendar-outline" size={18} color="#22c55e" />
+                </View>
+                <View style={styles.agendaHeaderText}>
+                  <Text style={styles.agendaDay}>
+                    {["", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"][agenda.dia_semana]}
+                    {" · "}{agenda.turno}
+                  </Text>
+                  <Text style={styles.agendaCooperativa}>{agenda.cooperativa}</Text>
+                </View>
+                <Text style={styles.agendaHours}>
+                  {agenda.turno === "Manhã" ? "07h–12h" : "13h–18h"}
+                </Text>
+              </View>
+              <Text style={styles.agendaAreas}>{agenda.areas_coleta}</Text>
+            </View>
+          ))
+        )}
+
+        {bairroColeta ? (
+          <Text style={styles.collectionReminderNote}>
+            {Number(dadosUsuario?.deseja_notificacoes) === 1
+              ? "Com as notificações do perfil ativadas, você receberá um lembrete no turno da coleta do seu bairro."
+              : "Ative as notificações em Perfil > Notificações para receber um lembrete no turno da coleta."}
+          </Text>
+        ) : null}
+
+        <Text style={[styles.sectionTitle, styles.ecopontoTitle]}>Ecopontos de São Leopoldo</Text>
+        <Text style={styles.mapDescription}>
+          Acompanhe um ponto para receber avisos quando as informações dele forem atualizadas.
+        </Text>
+
+        <Pressable
+          style={styles.sourceLink}
+          onPress={() =>
+            Linking.openURL("https://www.saoleopoldo.rs.gov.br/conteudo/1722/1?titulo=SERVI%C3%87OS+URBANOS")
+              .catch((error) => {
+                console.error("Erro ao abrir a fonte municipal dos Ecopontos:", error);
+                Alert.alert("Erro", "Não foi possível abrir a página da Prefeitura.");
+              })
+          }
+        >
+          <Ionicons name="open-outline" size={15} color="#22c55e" />
+          <Text style={styles.sourceLinkText}>Consultar informações oficiais</Text>
+        </Pressable>
+
+        <View style={styles.scheduleNotice}>
+          <Text style={styles.scheduleNoticeText}>
+            Estes Ecopontos recebem pneus, móveis, resíduos de poda e entulho. Não são pontos de entrega de recicláveis domésticos comuns. O calendário de coleta seletiva por bairro não foi confirmado pela fonte municipal e não é exibido aqui.
+          </Text>
+        </View>
 
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
             <Ionicons name="search" size={18} color="#8a8a8a" style={{ marginRight: 8 }} />
             <TextInput
-              placeholder="Buscar seu bairro..."
+              value={buscaPonto}
+              onChangeText={setBuscaPonto}
+              placeholder="Buscar Ecoponto ou bairro..."
               placeholderTextColor="#8a8a8a"
               style={styles.searchInput}
             />
           </View>
-          <Pressable style={styles.filterButton}>
-            <Ionicons name="options-outline" size={18} color="#22c55e" />
-          </Pressable>
         </View>
 
-        {/* Próxima coleta */}
-        <Text style={styles.sectionTitle}>Próxima Coleta</Text>
-
-        <View style={styles.nextCollectionCard}>
-          <View style={styles.nextCollectionLeft}>
-            <View style={styles.calendarIcon}>
-              <Ionicons name="calendar" size={22} color="#22c55e" />
-            </View>
-
-            <View>
-              <Text style={styles.nextCollectionLabel}>No seu bairro</Text>
-              <Text style={styles.nextCollectionTitle}>Centro</Text>
-              <View style={styles.nextCollectionBadge}>
-                <Text style={styles.nextCollectionBadgeText}>Terça-feira ; Manhã e Tarde</Text>
+        {erroAcompanhamento ? (
+          <Text style={styles.relatoError}>{erroAcompanhamento}</Text>
+        ) : null}
+        {carregandoPontos ? (
+          <Text style={styles.relatoEmpty}>Carregando pontos de entrega...</Text>
+        ) : erroPontos ? (
+          <Text style={styles.relatoError}>{erroPontos}</Text>
+        ) : pontosFiltrados.length === 0 ? (
+          <Text style={styles.relatoEmpty}>
+            Nenhum Ecoponto encontrado. Verifique se a migração de notificações e pontos foi aplicada.
+          </Text>
+        ) : (
+          pontosFiltrados.map((ponto) => (
+            <View key={ponto.id_ponto} style={styles.pontoCard}>
+              <View style={styles.pontoIcon}>
+                <Ionicons name="location" size={20} color="#22c55e" />
+              </View>
+              <View style={styles.pontoInfo}>
+                <Text style={styles.pontoNome}>{ponto.nome}</Text>
+                <Text style={styles.pontoDescricao}>{ponto.endereco}</Text>
+                <Text style={styles.pontoDescricao}>{ponto.tipo_residuo}</Text>
+                {ponto.horario_funcionamento ? (
+                  <Text style={styles.pontoHorario}>{ponto.horario_funcionamento}</Text>
+                ) : null}
+                {ponto.telefone ? (
+                  <Text style={styles.pontoDescricao}>Contato: {ponto.telefone}</Text>
+                ) : null}
+                {ponto.descricao ? (
+                  <Text style={styles.pontoDescricao}>{ponto.descricao}</Text>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={pontoAtualizando !== null}
+                  onPress={() => alterarAcompanhamento(ponto)}
+                  style={[
+                    styles.followButton,
+                    ponto.acompanhando && styles.followButtonActive,
+                  ]}
+                >
+                  <Ionicons
+                    name={ponto.acompanhando ? "notifications" : "notifications-outline"}
+                    size={16}
+                    color={ponto.acompanhando ? "#0b0b0b" : "#22c55e"}
+                  />
+                  <Text
+                    style={[
+                      styles.followButtonText,
+                      ponto.acompanhando && styles.followButtonTextActive,
+                    ]}
+                  >
+                    {pontoAtualizando === ponto.id_ponto
+                      ? "Salvando..."
+                      : ponto.acompanhando
+                        ? "Acompanhando"
+                        : "Acompanhar ponto"}
+                  </Text>
+                </Pressable>
               </View>
             </View>
-          </View>
-
-          <View style={styles.nextCollectionRight}>
-            <Ionicons name="leaf-outline" size={16} color="#22c55e" />
-            <Text style={styles.nextCollectionDaysLabel}>Faltam</Text>
-            <Text style={styles.nextCollectionDays}>1 dia</Text>
-            <Text style={styles.nextCollectionDate}>10 de jun ; Terça</Text>
-          </View>
-        </View>
-
-        {/* Ver cronograma por dia */}
-        <Text style={styles.sectionTitle}>Ver cronograma por dia</Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginBottom: 20 }}
-        >
-          {dias.map((dia, index) => (
-            <Pressable
-              key={index}
-              onPress={() => setDiaAtivo(dia)}
-              style={[
-                styles.dayChip,
-                diaAtivo === dia && styles.dayChipActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.dayChipText,
-                  diaAtivo === dia && styles.dayChipTextActive,
-                ]}
-              >
-                {dia}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Bairros */}
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Bairros - Segunda-feira</Text>
-          <Pressable style={styles.sortRow}>
-            <Text style={styles.sortText}>16 bairros</Text>
-            <Ionicons name="chevron-forward" size={14} color="#22c55e" />
-          </Pressable>
-        </View>
-
-        <View style={styles.bairrosGroup}>
-          {bairros.map((bairro, index) => (
-            <Pressable
-              key={index}
-              style={[
-                styles.bairroItem,
-                index !== bairros.length - 1 && styles.bairroItemBorder,
-              ]}
-            >
-              <View style={styles.bairroIconCircle}>
-                <Ionicons name="home-outline" size={18} color="#22c55e" />
-              </View>
-
-              <View style={styles.bairroInfo}>
-                <Text style={styles.bairroNome}>{bairro.nome}</Text>
-                <Text style={styles.bairroTurno}>{bairro.turno}</Text>
-              </View>
-
-              <View style={styles.bairroBadge}>
-                <Text style={styles.bairroBadgeText}>{bairro.badge}</Text>
-              </View>
-
-              <Ionicons name="chevron-forward" size={16} color="#8a8a8a" style={{ marginLeft: 8 }} />
-            </Pressable>
-          ))}
-
-          <Pressable style={[styles.bairroItem, { justifyContent: "center" }]}>
-            <Ionicons name="map-outline" size={18} color="#22c55e" style={{ marginRight: 8 }} />
-            <Text style={styles.verMapaText}>Ver no mapa</Text>
-          </Pressable>
-        </View>
-
-        {/* Materiais aceitos */}
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Materiais aceitos</Text>
-          <Pressable style={styles.sortRow}>
-            <Text style={styles.sortText}>Ver todos</Text>
-            <Ionicons name="chevron-forward" size={14} color="#22c55e" />
-          </Pressable>
-        </View>
-
-        <View style={styles.materiaisRow}>
-          {materiais.map((mat, index) => (
-            <View key={index} style={styles.materialItem}>
-              <View style={styles.materialIconCircle}>
-                <Ionicons name={mat.icon} size={20} color="#22c55e" />
-              </View>
-              <Text style={styles.materialText}>{mat.nome}</Text>
-            </View>
-          ))}
-        </View>
+          ))
+        )}
       </ScrollView>
       <TabBar active="Infos" setScreen={setScreen} />
+      <Modal
+        visible={Boolean(relatoSelecionado)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRelatoSelecionado(null)}
+      >
+        <View style={styles.relatoModalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setRelatoSelecionado(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar detalhes do relato"
+          />
+          <View style={styles.relatoModalCard}>
+            <View style={styles.relatoModalHeader}>
+              <Text style={styles.relatoModalTitle}>Detalhes do relato</Text>
+              <Pressable
+                onPress={() => setRelatoSelecionado(null)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Fechar detalhes"
+              >
+                <Ionicons name="close" size={24} color="#e5e5e5" />
+              </Pressable>
+            </View>
+            {relatoSelecionado ? (
+              <ScrollView
+                contentContainerStyle={styles.relatoModalContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {relatoSelecionado.imagem ? (
+                  <RelatoImage
+                    caminho={relatoSelecionado.imagem}
+                    style={styles.relatoDetailImage}
+                  />
+                ) : null}
+                <Text style={styles.relatoDetailName}>
+                  {relatoSelecionado.titulo}
+                </Text>
+                <View style={styles.relatoDetailField}>
+                  <Text style={styles.relatoDetailLabel}>Status</Text>
+                  <Text style={styles.relatoDetailValue}>
+                    {relatoSelecionado.status || "Pendente"}
+                  </Text>
+                </View>
+                <View style={styles.relatoDetailField}>
+                  <Text style={styles.relatoDetailLabel}>Categoria</Text>
+                  <Text style={styles.relatoDetailValue}>
+                    {relatoSelecionado.categoria || "Não informada"}
+                  </Text>
+                </View>
+                <View style={styles.relatoDetailField}>
+                  <Text style={styles.relatoDetailLabel}>Endereço</Text>
+                  <Text style={styles.relatoDetailValue}>
+                    {[relatoSelecionado.endereco, relatoSelecionado.bairro]
+                      .filter(Boolean)
+                      .join(" · ") || "Não informado"}
+                  </Text>
+                </View>
+                <View style={styles.relatoDetailField}>
+                  <Text style={styles.relatoDetailLabel}>Data</Text>
+                  <Text style={styles.relatoDetailValue}>
+                    {relatoSelecionado.data_criacao
+                      ? new Date(relatoSelecionado.data_criacao).toLocaleString("pt-BR")
+                      : "Não informada"}
+                  </Text>
+                </View>
+                <View style={styles.relatoDetailField}>
+                  <Text style={styles.relatoDetailLabel}>Descrição</Text>
+                  <Text style={styles.relatoDetailValue}>
+                    {relatoSelecionado.descricao || "Sem descrição"}
+                  </Text>
+                </View>
+              </ScrollView>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function RelatoImage({ caminho }) {
+function RelatoImage({ caminho, style }) {
   const [uri, setUri] = useState(null);
   const [erro, setErro] = useState(false);
 
@@ -489,7 +841,7 @@ function RelatoImage({ caminho }) {
 
   if (erro) {
     return (
-      <View style={styles.relatoThumbnail}>
+      <View style={[styles.relatoThumbnail, style]}>
         <Text style={styles.relatoImageError}>Imagem indisponível</Text>
       </View>
     );
@@ -498,7 +850,7 @@ function RelatoImage({ caminho }) {
   return uri ? (
     <Image
       source={{ uri }}
-      style={styles.relatoThumbnail}
+      style={[styles.relatoThumbnail, style]}
       accessibilityLabel="Imagem do relato"
       onError={(event) => {
         console.error(
@@ -509,7 +861,7 @@ function RelatoImage({ caminho }) {
       }}
     />
   ) : (
-    <View style={styles.relatoThumbnail}>
+    <View style={[styles.relatoThumbnail, style]}>
       <Ionicons name="image-outline" size={20} color="#8a8a8a" />
     </View>
   );
@@ -579,7 +931,7 @@ const styles = StyleSheet.create({
 
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 140,
   },
 
   subtitle: {
@@ -587,6 +939,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginBottom: 20,
+  },
+
+  notificationTestCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    marginBottom: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#2a4b34",
+    backgroundColor: "#142018",
+  },
+
+  notificationTestText: {
+    flex: 1,
+    marginRight: 10,
+  },
+
+  notificationTestTitle: {
+    color: "#e5e5e5",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+
+  notificationTestButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor: "#22c55e",
+  },
+
+  notificationTestButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  notificationTestButtonText: {
+    color: "#0b0b0b",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginLeft: 5,
   },
 
   mapCard: {
@@ -729,6 +1126,74 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  relatoModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.72)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+
+  relatoModalCard: {
+    width: "100%",
+    maxWidth: 520,
+    maxHeight: "82%",
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    borderRadius: 16,
+    backgroundColor: "#161515",
+    padding: 18,
+  },
+
+  relatoModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+
+  relatoModalTitle: {
+    color: "#e5e5e5",
+    fontSize: 17,
+    fontWeight: "bold",
+  },
+
+  relatoModalContent: {
+    paddingBottom: 8,
+  },
+
+  relatoDetailImage: {
+    width: "100%",
+    height: 190,
+    borderRadius: 12,
+    marginRight: 0,
+    marginBottom: 14,
+  },
+
+  relatoDetailName: {
+    color: "#e5e5e5",
+    fontSize: 16,
+    fontWeight: "bold",
+    marginBottom: 16,
+  },
+
+  relatoDetailField: {
+    marginBottom: 14,
+  },
+
+  relatoDetailLabel: {
+    color: "#22c55e",
+    fontSize: 11,
+    fontWeight: "bold",
+    marginBottom: 4,
+  },
+
+  relatoDetailValue: {
+    color: "#d4d4d4",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
   relatoEmptyCard: {
     borderWidth: 1,
     borderColor: "#3a3a3a",
@@ -807,6 +1272,13 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
 
+  verRelatoText: {
+    color: "#22c55e",
+    fontSize: 9,
+    fontWeight: "600",
+    marginTop: 7,
+  },
+
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -844,210 +1316,211 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  filterButton: {
-    width: 46,
-    height: 46,
-    borderWidth: 1,
-    borderColor: "#3a3a3a",
-    backgroundColor: "#161616",
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  nextCollectionCard: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#22c55e",
-    backgroundColor: "#0f1f14",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 28,
-  },
-
-  nextCollectionLeft: {
+  bairroColetaRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 10,
+  },
+
+  bairroColetaInput: {
     flex: 1,
-  },
-
-  calendarIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: "#22c55e",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  nextCollectionLabel: {
-    color: "#22c55e",
-    fontSize: 11,
-    marginBottom: 2,
-  },
-
-  nextCollectionTitle: {
-    color: "#e5e5e5",
-    fontWeight: "bold",
-    fontSize: 18,
-    marginBottom: 6,
-  },
-
-  nextCollectionBadge: {
-    backgroundColor: "#163a22",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: "flex-start",
-  },
-
-  nextCollectionBadgeText: {
-    color: "#22c55e",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-
-  nextCollectionRight: {
-    alignItems: "flex-end",
-  },
-
-  nextCollectionDaysLabel: {
-    color: "#8a8a8a",
-    fontSize: 10,
-    marginTop: 4,
-  },
-
-  nextCollectionDays: {
-    color: "#22c55e",
-    fontWeight: "bold",
-    fontSize: 16,
-    marginVertical: 2,
-  },
-
-  nextCollectionDate: {
-    color: "#8a8a8a",
-    fontSize: 10,
-  },
-
-  dayChip: {
+    minWidth: 0,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: "#3a3a3a",
-    backgroundColor: "#161616",
     borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    color: "#e5e5e5",
+    backgroundColor: "#1d1d1d",
+    fontSize: 13,
     marginRight: 8,
   },
 
-  dayChipActive: {
+  bairroColetaButton: {
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 10,
     backgroundColor: "#22c55e",
-    borderColor: "#22c55e",
   },
 
-  dayChipText: {
-    color: "#8a8a8a",
-    fontWeight: "bold",
+  bairroColetaButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  bairroColetaButtonText: {
+    color: "#0b0b0b",
     fontSize: 12,
+    fontWeight: "bold",
   },
 
-  dayChipTextActive: {
-    color: "#000",
+  coletaSourceLink: {
+    marginTop: 2,
   },
 
-  bairrosGroup: {
+  agendaCard: {
+    padding: 14,
+    marginBottom: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#3a3a3a",
-    backgroundColor: "#161616",
-    borderRadius: 14,
-    marginBottom: 28,
-    overflow: "hidden",
+    borderColor: "#2f4635",
+    backgroundColor: "#19211b",
   },
 
-  bairroItem: {
+  agendaHeader: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    marginBottom: 9,
   },
 
-  bairroItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#2a2a2a",
-  },
-
-  bairroIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#0f1f14",
+  agendaIcon: {
+    width: 34,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
+    borderRadius: 17,
+    backgroundColor: "#0f2e1a",
   },
 
-  bairroInfo: {
+  agendaHeaderText: {
     flex: 1,
   },
 
-  bairroNome: {
+  agendaDay: {
     color: "#e5e5e5",
-    fontWeight: "bold",
     fontSize: 13,
-    marginBottom: 2,
-  },
-
-  bairroTurno: {
-    color: "#8a8a8a",
-    fontSize: 10,
-  },
-
-  bairroBadge: {
-    backgroundColor: "#163a22",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-
-  bairroBadgeText: {
-    color: "#22c55e",
-    fontSize: 10,
     fontWeight: "bold",
   },
 
-  verMapaText: {
+  agendaCooperativa: {
     color: "#22c55e",
-    fontWeight: "bold",
-    fontSize: 13,
+    fontSize: 11,
+    marginTop: 3,
   },
 
-  materiaisRow: {
+  agendaHours: {
+    color: "#b5b5b5",
+    fontSize: 10,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+
+  agendaAreas: {
+    color: "#a5a5a5",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  collectionReminderNote: {
+    color: "#999",
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 2,
+    marginBottom: 24,
+  },
+
+  ecopontoTitle: {
+    marginTop: 4,
+  },
+
+  sourceLink: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-
-  materialItem: {
     alignItems: "center",
-    flex: 1,
+    alignSelf: "flex-start",
+    marginBottom: 14,
   },
 
-  materialIconCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  sourceLinkText: {
+    color: "#22c55e",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 6,
+  },
+
+  scheduleNotice: {
+    padding: 12,
+    marginBottom: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#4b3b14",
+    backgroundColor: "#241f12",
+  },
+
+  scheduleNoticeText: {
+    color: "#e7d9a8",
+    fontSize: 12,
+    lineHeight: 18,
+  },
+
+  pontoCard: {
+    flexDirection: "row",
+    padding: 14,
+    marginBottom: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: "#3a3a3a",
-    backgroundColor: "#161616",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
+    backgroundColor: "#1d1d1d",
   },
 
-  materialText: {
-    color: "#8a8a8a",
-    fontSize: 9,
-    textAlign: "center",
+  pontoIcon: {
+    width: 36,
+    height: 36,
+    marginRight: 11,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#0f2e1a",
+  },
+
+  pontoInfo: {
+    flex: 1,
+  },
+
+  pontoNome: {
+    color: "#e5e5e5",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+
+  pontoDescricao: {
+    color: "#a5a5a5",
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 3,
+  },
+
+  pontoHorario: {
+    color: "#22c55e",
+    fontSize: 12,
+    fontWeight: "600",
+    marginVertical: 4,
+  },
+
+  followButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#22c55e",
+    borderRadius: 18,
+  },
+
+  followButtonActive: {
+    backgroundColor: "#22c55e",
+  },
+
+  followButtonText: {
+    color: "#22c55e",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginLeft: 6,
+  },
+
+  followButtonTextActive: {
+    color: "#0b0b0b",
   },
 });

@@ -2,6 +2,12 @@ import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, Image, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import { API_URL } from "../src/services/api";
+import {
+  appendImageToFormData,
+  pickImageFromLibrary,
+  sendFormData,
+} from "../src/services/imageStorage";
 
 const materiais = [
   "Papel",
@@ -11,46 +17,43 @@ const materiais = [
   "Orgânico",
 ];
 
-export default function RegistrarReciclagem({ setScreen }) {
+function formatarDataLocal(date) {
+  const dia = String(date.getDate()).padStart(2, "0");
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const ano = date.getFullYear();
+  return `${dia}/${mes}/${ano}`;
+}
+
+function formatarDataDigitada(value) {
+  const digitos = value.replace(/\D/g, "").slice(0, 8);
+  if (digitos.length <= 2) {
+    return digitos;
+  }
+  if (digitos.length <= 4) {
+    return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+  }
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+}
+
+export default function RegistrarReciclagem({ setScreen, dadosUsuario, usuario }) {
   const [material, setMaterial] = useState("Plástico");
   const [quantidade, setQuantidade] = useState("");
-  const [data, setData] = useState("");
+  const [data, setData] = useState(() => formatarDataLocal(new Date()));
   const [local, setLocal] = useState("");
   const [foto, setFoto] = useState(null);
   const [mensagem, setMensagem] = useState("");
+  const [carregando, setCarregando] = useState(false);
 
   async function escolherFoto() {
     try {
-      const permissao =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permissao.granted) {
-        Alert.alert(
-          "Permissão necessária",
-          "Precisamos de acesso à galeria para adicionar uma foto como comprovante."
-        );
-        return;
-      }
-
-      const resultado =
-        await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ["images"],
-          allowsEditing: true,
-          aspect: [4, 3],
-          quality: 0.8,
-        });
-
-      if (!resultado.canceled) {
-        setFoto(resultado.assets[0].uri);
+      const asset = await pickImageFromLibrary();
+      if (asset) {
+        setFoto(asset);
         setMensagem("");
       }
     } catch (error) {
       console.error("Erro ao escolher foto:", error);
-
-      Alert.alert(
-        "Erro",
-        "Não foi possível selecionar a foto."
-      );
+      setMensagem(error.message || "Não foi possível selecionar a foto.");
     }
   }
 
@@ -72,19 +75,17 @@ export default function RegistrarReciclagem({ setScreen }) {
           allowsEditing: true,
           aspect: [4, 3],
           quality: 0.8,
+          maxWidth: 1600,
+          maxHeight: 1600,
         });
 
       if (!resultado.canceled) {
-        setFoto(resultado.assets[0].uri);
+        setFoto(resultado.assets[0]);
         setMensagem("");
       }
     } catch (error) {
       console.error("Erro ao tirar foto:", error);
-
-      Alert.alert(
-        "Erro",
-        "Não foi possível tirar a foto."
-      );
+      setMensagem(error.message || "Não foi possível tirar a foto.");
     }
   }
 
@@ -113,7 +114,7 @@ export default function RegistrarReciclagem({ setScreen }) {
     setFoto(null);
   }
 
-  function handleRegistrar() {
+  async function handleRegistrar() {
     if (!quantidade || !data || !local) {
       setMensagem(
         "Preencha a quantidade, a data e o local da reciclagem."
@@ -142,21 +143,67 @@ export default function RegistrarReciclagem({ setScreen }) {
       return;
     }
 
+    const idUsuario = dadosUsuario?.id_usuario;
+    if (!idUsuario) {
+      setMensagem("Não foi possível identificar sua conta. Entre novamente e tente.");
+      return;
+    }
+
+    const partesData = data.trim().split("/");
+    if (partesData.length !== 3) {
+      setMensagem("Informe a data no formato DD/MM/AAAA.");
+      return;
+    }
+
+    const [dia, mes, ano] = partesData.map(Number);
+    const dataSelecionada = new Date(Date.UTC(ano, mes - 1, dia));
+    if (
+      !dia || !mes || !ano
+      || dataSelecionada.getUTCFullYear() !== ano
+      || dataSelecionada.getUTCMonth() !== mes - 1
+      || dataSelecionada.getUTCDate() !== dia
+    ) {
+      setMensagem("Informe uma data válida no formato DD/MM/AAAA.");
+      return;
+    }
+
+    setCarregando(true);
     setMensagem("");
 
-    Alert.alert(
-      "Reciclagem registrada!",
-      `Você registrou ${quantidade} kg de ${material}.\n\nA foto foi adicionada como comprovante.`,
-      [
-        {
-          text: "OK",
-          onPress: () => setScreen("Home"),
-        },
-      ],
-      {
-        cancelable: false,
+    try {
+      const formData = new FormData();
+      formData.append("id_usuario", String(idUsuario));
+      formData.append("material", material);
+      formData.append("quantidade_kg", String(quantidadeNumero));
+      formData.append(
+        "data_reciclagem",
+        `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`
+      );
+      formData.append("local", local.trim());
+      await appendImageToFormData(formData, foto);
+
+      const response = await sendFormData(`${API_URL}/reciclagens`, {
+        method: "POST",
+        body: formData,
+      });
+      const resposta = await response.json();
+
+      if (!response.ok) {
+        throw new Error(resposta.mensagem || "Não foi possível registrar a reciclagem.");
       }
-    );
+
+      Alert.alert(
+        "Registro enviado",
+        "Sua reciclagem está pendente de aprovação. Quando for aprovada, contará para o desafio de reciclagem.",
+        [{ text: "OK", onPress: () => setScreen("Desafios") }],
+        { cancelable: false }
+      );
+    } catch (error) {
+      console.error("Erro ao registrar reciclagem:", error);
+      setMensagem(error.message || "Não foi possível registrar a reciclagem.");
+    } finally {
+      setCarregando(false);
+    }
   }
 
   return (
@@ -281,11 +328,13 @@ export default function RegistrarReciclagem({ setScreen }) {
 
           <TextInput
             value={data}
-            onChangeText={setData}
+            onChangeText={(value) => setData(formatarDataDigitada(value))}
             style={styles.input}
             placeholder="DD/MM/AAAA"
             placeholderTextColor="#8a8a8a"
-            keyboardType="numbers-and-punctuation"
+            keyboardType="number-pad"
+            maxLength={10}
+            selectTextOnFocus
           />
         </View>
 
@@ -347,7 +396,7 @@ export default function RegistrarReciclagem({ setScreen }) {
         ) : (
           <View style={styles.photoPreviewContainer}>
             <Image
-              source={{ uri: foto }}
+              source={{ uri: foto.uri }}
               style={styles.photoPreview}
             />
 
@@ -385,7 +434,8 @@ export default function RegistrarReciclagem({ setScreen }) {
         {/* BOTÃO */}
         <Pressable
           onPress={handleRegistrar}
-          style={styles.button}
+          style={[styles.button, carregando && styles.buttonDisabled]}
+          disabled={carregando}
           accessibilityRole="button"
           accessibilityLabel="Confirmar reciclagem"
         >
@@ -396,7 +446,7 @@ export default function RegistrarReciclagem({ setScreen }) {
           />
 
           <Text style={styles.buttonText}>
-            Confirmar reciclagem
+            {carregando ? "Enviando..." : "Confirmar reciclagem"}
           </Text>
         </Pressable>
 
@@ -408,8 +458,7 @@ export default function RegistrarReciclagem({ setScreen }) {
         ) : null}
 
         <Text style={styles.required}>
-          * Preencha todos os campos e adicione uma foto
-          como comprovante.
+          * Preencha todos os campos e adicione uma foto como comprovante. O registro precisa ser aprovado para contar para os desafios.
         </Text>
       </ScrollView>
     </View>
@@ -663,6 +712,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     marginTop: 10,
+  },
+
+  buttonDisabled: {
+    opacity: 0.6,
   },
 
   buttonText: {

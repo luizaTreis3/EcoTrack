@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Image } from 
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import TabBar from "./TabBar";
+import { getDadosDesafiosUsuario } from "../src/services/impactData";
 
 const dicasSustentaveis = [
   {
@@ -456,11 +457,63 @@ function ProgressRing({ size, strokeWidth, progress, color, children }) {
   );
 }
 
-export default function Home({ setScreen }) {
+export default function Home({
+  setScreen,
+  dadosUsuario,
+  carregandoPerfil = false,
+  erroPerfil = "",
+  onRetry,
+}) {
   const [busca, setBusca] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [dataDica, setDataDica] = useState(() => new Date());
+  const [dadosPainel, setDadosPainel] = useState(null);
+  const [carregandoPainel, setCarregandoPainel] = useState(false);
+  const [erroPainel, setErroPainel] = useState("");
+  const [tentativaPainel, setTentativaPainel] = useState(0);
   const { dica, numero: numeroDica } = obterDicaDoDia(dataDica);
+  const idUsuario = dadosUsuario?.id_usuario;
+
+  useEffect(() => {
+    let ativo = true;
+
+    if (!idUsuario) {
+      setDadosPainel(null);
+      setCarregandoPainel(false);
+      setErroPainel("");
+      return () => {
+        ativo = false;
+      };
+    }
+
+    async function carregarDadosPainel() {
+      setCarregandoPainel(true);
+      setErroPainel("");
+
+      try {
+        const data = await getDadosDesafiosUsuario(idUsuario);
+
+        if (ativo) {
+          setDadosPainel(data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar EcoScore e impacto:", error);
+        if (ativo) {
+          setErroPainel(error.message || "Não foi possível carregar seu impacto.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoPainel(false);
+        }
+      }
+    }
+
+    carregarDadosPainel();
+
+    return () => {
+      ativo = false;
+    };
+  }, [idUsuario, tentativaPainel]);
 
   useEffect(() => {
     const agora = new Date();
@@ -482,8 +535,32 @@ export default function Home({ setScreen }) {
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
     { label: "Desafios", screen: "Desafios", icon: "trophy-outline" },
     { label: "Relato", screen: "CriarRelato", icon: "create-outline" },
+    { label: "Notificações", screen: "Notificacoes", icon: "notifications-outline" },
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
+
+  const impactoDisponivel = Boolean(dadosPainel?.impacto);
+  const ecoPoints = Number(dadosPainel?.eco_points) || 0;
+  const progressoEcoScore = Math.min(ecoPoints / 1000, 1) * 100;
+  const desafioPrincipal = dadosPainel?.desafios?.find((desafio) => !desafio.concluido)
+    || dadosPainel?.desafios?.[0];
+  const metaDesafio = Math.max(Number(desafioPrincipal?.meta) || 1, 1);
+  const progressoDesafio = Number(desafioPrincipal?.progresso) || 0;
+  const percentualDesafio = Math.min(progressoDesafio / metaDesafio, 1) * 100;
+  const valoresImpacto = dadosPainel?.impacto;
+  const valorCarregamento = carregandoPerfil || carregandoPainel;
+  const erroCarregamento = erroPerfil || erroPainel;
+  const primeiroNome = dadosUsuario?.nome_completo?.trim().split(/\s+/)[0] || "Usuário";
+  const pesoReciclado = impactoDisponivel
+    ? `${Number(valoresImpacto.kg_reciclados).toLocaleString("pt-BR", {
+        maximumFractionDigits: 2,
+      })} kg`
+    : valorCarregamento
+      ? "..."
+      : "—";
+  const valorImpacto = (valor) => (
+    impactoDisponivel ? Number(valor || 0).toLocaleString("pt-BR") : valorCarregamento ? "..." : "—"
+  );
 
   return (
     <View style={styles.pageWrap}>
@@ -524,7 +601,7 @@ export default function Home({ setScreen }) {
       {/* Saudação */}
       <View style={styles.section}>
         <Text style={styles.greeting}>
-          Olá, <Text style={{ color: "#22c55e" }}>Usuário</Text>!
+          Olá, <Text style={{ color: "#22c55e" }}>{primeiroNome}</Text>!
         </Text>
         <Text style={styles.subGreeting}>
           Que tal transformar hoje em um dia{" "}
@@ -540,20 +617,40 @@ export default function Home({ setScreen }) {
         </View>
 
         <View style={styles.ecoScoreBody}>
-          <ProgressRing size={100} strokeWidth={10} progress={75} color="#22c55e">
-            <Text style={styles.ecoScoreNumber}>750</Text>
-            <Text style={styles.ecoScoreOf}>de 1000</Text>
+          <ProgressRing
+            size={100}
+            strokeWidth={10}
+            progress={impactoDisponivel ? progressoEcoScore : 0}
+            color="#22c55e"
+          >
+            <Text style={styles.ecoScoreNumber}>
+              {impactoDisponivel ? ecoPoints.toLocaleString("pt-BR") : valorCarregamento ? "..." : "—"}
+            </Text>
+            <Text style={styles.ecoScoreOf}>EcoPoints</Text>
           </ProgressRing>
 
           <View style={{ flex: 1, marginLeft: 18 }}>
-            <Text style={styles.ecoScoreGood}>Muito bem!</Text>
+            <Text style={styles.ecoScoreGood}>
+              {valorCarregamento
+                ? "Carregando..."
+                : erroCarregamento
+                  ? "Dados indisponíveis"
+                  : ecoPoints > 0
+                    ? "Muito bem!"
+                    : "Vamos começar!"}
+            </Text>
             <Text style={styles.ecoScoreText}>
-              Você está no caminho certo para uma cidade mais sustentável.
+              Seu saldo cresce conforme os desafios ambientais são concluídos.
             </Text>
 
-            <Pressable style={styles.outlineButton}>
+            <Pressable
+              style={styles.outlineButton}
+              onPress={() => setScreen("Desafios")}
+              accessibilityRole="button"
+              accessibilityLabel="Ver meus desafios"
+            >
               <Ionicons name="trending-up" size={16} color="#e5e5e5" style={{ marginRight: 6 }} />
-              <Text style={styles.outlineButtonText}>Ver meu impacto</Text>
+              <Text style={styles.outlineButtonText}>Ver meus desafios</Text>
             </Pressable>
           </View>
         </View>
@@ -563,31 +660,64 @@ export default function Home({ setScreen }) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Seu impacto</Text>
 
-        <View style={styles.rowThree}>
+        <View style={styles.impactGrid}>
           <View style={styles.statCard}>
             <View style={styles.statIconCircle}>
               <Ionicons name="leaf-outline" size={20} color="#22c55e" />
             </View>
-            <Text style={styles.statNumber}>12,4 kg</Text>
-            <Text style={styles.statLabel}>CO² evitado</Text>
+            <Text style={styles.statNumber}>{pesoReciclado}</Text>
+            <Text style={styles.statLabel}>Kg reciclados aprovados</Text>
           </View>
 
           <View style={styles.statCard}>
             <View style={styles.statIconCircle}>
               <Ionicons name="refresh-outline" size={20} color="#22c55e" />
             </View>
-            <Text style={styles.statNumber}>23</Text>
-            <Text style={styles.statLabel}>Materiais reciclados</Text>
+            <Text style={styles.statNumber}>
+              {valorImpacto(valoresImpacto?.reciclagens_aprovadas)}
+            </Text>
+            <Text style={styles.statLabel}>Reciclagens aprovadas</Text>
           </View>
 
           <View style={styles.statCard}>
             <View style={styles.statIconCircle}>
-              <Ionicons name="construct-outline" size={20} color="#22c55e" />
+              <Ionicons name="checkmark-done-outline" size={20} color="#22c55e" />
             </View>
-            <Text style={styles.statNumber}>10</Text>
-            <Text style={styles.statLabel}>Danos estruturais consertados</Text>
+            <Text style={styles.statNumber}>
+              {valorImpacto(valoresImpacto?.relatos_resolvidos)}
+            </Text>
+            <Text style={styles.statLabel}>Relatos resolvidos</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <View style={styles.statIconCircle}>
+              <Ionicons name="trophy-outline" size={20} color="#22c55e" />
+            </View>
+            <Text style={styles.statNumber}>
+              {valorImpacto(valoresImpacto?.desafios_participados)}
+            </Text>
+            <Text style={styles.statLabel}>Desafios participados</Text>
           </View>
         </View>
+        {erroCarregamento ? (
+          <Pressable
+            onPress={() => {
+              if (erroPerfil && onRetry) {
+                onRetry();
+              } else {
+                setTentativaPainel((tentativa) => tentativa + 1);
+              }
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={styles.impactError}>
+              {erroCarregamento ===
+              "Os seus dados serão atualizados de acordo com o seu progresso."
+                ? erroCarregamento
+                : `${erroCarregamento} Toque para tentar novamente.`}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* Ações rápidas */}
@@ -637,19 +767,39 @@ export default function Home({ setScreen }) {
         </View>
 
         <View style={[styles.card, styles.desafioCard]}>
-          <ProgressRing size={64} strokeWidth={6} progress={42} color="#22c55e">
-            <Text style={styles.desafioPercent}>42%</Text>
+          <ProgressRing
+            size={64}
+            strokeWidth={6}
+            progress={desafioPrincipal ? percentualDesafio : 0}
+            color="#22c55e"
+          >
+            <Text style={styles.desafioPercent}>
+              {desafioPrincipal ? `${Math.round(percentualDesafio)}%` : "—"}
+            </Text>
           </ProgressRing>
 
           <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={styles.desafioTitle}>Desafio Sem Plástico</Text>
+            <Text style={styles.desafioTitle}>
+              {desafioPrincipal?.titulo || (valorCarregamento ? "Carregando desafio..." : "Desafio ambiental")}
+            </Text>
             <Text style={styles.desafioText}>
-              Evite o uso de plástico descartável por 7 dias.
+              {desafioPrincipal?.descricao || "Seus desafios aparecerão aqui."}
             </Text>
             <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: "42%" }]} />
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${desafioPrincipal ? percentualDesafio : 0}%` },
+                ]}
+              />
             </View>
-            <Text style={styles.desafioDias}>3 de 7 dias</Text>
+            <Text style={styles.desafioDias}>
+              {desafioPrincipal
+                ? `${Math.min(progressoDesafio, metaDesafio)} de ${metaDesafio} registros aprovados`
+                : erroCarregamento
+                  ? "Não foi possível carregar o progresso."
+                  : "Nenhum progresso registrado."}
+            </Text>
           </View>
 
           <View style={styles.giftBox}>
@@ -918,8 +1068,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
 
+  impactGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+
   statCard: {
-    flex: 1,
+    flexBasis: "48%",
+    flexGrow: 0,
+    flexShrink: 0,
     borderWidth: 1,
     borderColor: "#262626",
     backgroundColor: "#161616",
@@ -927,7 +1085,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 8,
     alignItems: "center",
-    marginRight: 10,
+    marginBottom: 10,
   },
 
   actionCard: {
@@ -964,6 +1122,12 @@ const styles = StyleSheet.create({
     color: "#8a8a8a",
     fontSize: 10,
     textAlign: "center",
+  },
+
+  impactError: {
+    color: "#fca5a5",
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   actionTitle: {

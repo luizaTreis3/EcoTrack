@@ -15,10 +15,20 @@ import { API_URL } from "../src/services/api";
 import {
   appendImageToFormData,
   pickImageFromLibrary,
+  sendFormData,
 } from "../src/services/imageStorage";
 
-export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
+export default function CriarRelato({
+  setScreen,
+  usuario,
+  dadosUsuario,
+  carregandoPerfil = false,
+  erroPerfil = "",
+  onRetry,
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [categoriaAberta, setCategoriaAberta] = useState(false);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
 
   // Estados dos campos
   const [titulo, setTitulo] = useState("");
@@ -30,12 +40,27 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
   const [imagemRelato, setImagemRelato] = useState(null);
 
   const [carregando, setCarregando] = useState(false);
+  const categoriasRelato = ["Lixo", "Esgoto", "Infraestrutura", "Água", "Outros"];
+  const categoriasFiltradas = categoriasRelato.filter((opcao) =>
+    opcao
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .includes(
+        filtroCategoria
+          .trim()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+      )
+  );
 
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
     { label: "Desafios", screen: "Desafios", icon: "trophy-outline" },
     { label: "Relato", screen: "CriarRelato", icon: "create-outline" },
+    { label: "Notificações", screen: "Notificacoes", icon: "notifications-outline" },
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
 
@@ -56,6 +81,16 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
 
   async function handleCriarRelato() {
     const idUsuario = dadosUsuario?.id_usuario || usuario?.id_usuario;
+
+    if (carregandoPerfil || (usuario?.uid && !dadosUsuario && !erroPerfil)) {
+      Alert.alert("Aguarde", "Estamos carregando os dados do seu cadastro.");
+      return;
+    }
+
+    if (erroPerfil) {
+      Alert.alert("Cadastro indisponível", erroPerfil);
+      return;
+    }
 
     // Verifica se existe usuário logado
     if (!usuario?.uid || !idUsuario) {
@@ -103,14 +138,14 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
         headers = undefined;
       }
 
-      const response = await fetch(
-        `${API_URL}/relatos`,
-        {
-          method: "POST",
-          headers,
-          body,
-        }
-      );
+      const requestOptions = {
+        method: "POST",
+        headers,
+        body,
+      };
+      const response = imagemRelato
+        ? await sendFormData(`${API_URL}/relatos`, requestOptions)
+        : await fetch(`${API_URL}/relatos`, requestOptions);
 
       const data = await response.json();
 
@@ -182,10 +217,10 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
       <View style={styles.header}>
 
         <Pressable
-          onPress={() => setScreen("Login")}
+          onPress={() => setScreen("Home")}
           hitSlop={12}
           accessibilityRole="button"
-          accessibilityLabel="Voltar para o login"
+          accessibilityLabel="Voltar para o início"
         >
           <Ionicons
             name="chevron-back"
@@ -222,6 +257,18 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
         contentContainerStyle={styles.form}
         keyboardShouldPersistTaps="handled"
       >
+        {carregandoPerfil ? (
+          <Text style={styles.profileNotice}>Carregando os dados do seu cadastro...</Text>
+        ) : erroPerfil ? (
+          <View style={styles.profileErrorBox}>
+            <Text style={styles.profileErrorText}>{erroPerfil}</Text>
+            {onRetry ? (
+              <Pressable onPress={onRetry} style={styles.profileRetryButton}>
+                <Text style={styles.profileRetryText}>Tentar novamente</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* TÍTULO */}
         <View style={styles.row}>
@@ -292,24 +339,69 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
         />
 
         {/* CATEGORIA */}
-        <View style={styles.inputWithIcon}>
-
+        <Pressable
+          style={styles.inputWithIcon}
+          onPress={() => {
+            setCategoriaAberta((aberta) => !aberta);
+            setFiltroCategoria("");
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={categoria || "Selecionar categoria do relato"}
+          accessibilityState={{ expanded: categoriaAberta }}
+        >
           <Ionicons
             name="funnel-outline"
             size={18}
             color="#22c55e"
             style={{ marginRight: 8 }}
           />
-
-          <TextInput
-            style={styles.inputInline}
-            placeholder="Categoria*"
-            placeholderTextColor="#8a8a8a"
-            value={categoria}
-            onChangeText={setCategoria}
+          <Text style={[styles.inputInline, !categoria && styles.categoryPlaceholder]}>
+            {categoria || "Selecione a categoria*"}
+          </Text>
+          <Ionicons
+            name={categoriaAberta ? "chevron-up" : "chevron-down"}
+            size={18}
+            color="#8a8a8a"
           />
+        </Pressable>
 
-        </View>
+        {categoriaAberta ? (
+          <View style={styles.categoryOptions}>
+            <View style={styles.categorySearch}>
+              <Ionicons name="search" size={17} color="#8a8a8a" />
+              <TextInput
+                value={filtroCategoria}
+                onChangeText={setFiltroCategoria}
+                placeholder="Buscar categoria..."
+                placeholderTextColor="#8a8a8a"
+                style={styles.categorySearchInput}
+                autoCapitalize="none"
+                accessibilityLabel="Filtrar categorias do relato"
+              />
+            </View>
+            {categoriasFiltradas.map((opcao) => (
+              <Pressable
+                key={opcao}
+                style={styles.categoryOption}
+                onPress={() => {
+                  setCategoria(opcao);
+                  setCategoriaAberta(false);
+                  setFiltroCategoria("");
+                }}
+              >
+                <Text style={styles.categoryOptionText}>{opcao}</Text>
+                {categoria === opcao ? (
+                  <Ionicons name="checkmark" size={18} color="#22c55e" />
+                ) : null}
+              </Pressable>
+            ))}
+            {categoriasFiltradas.length === 0 ? (
+              <Text style={styles.noCategoryResults}>
+                Nenhuma categoria encontrada.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* DESCRIÇÃO */}
         <TextInput
@@ -353,10 +445,16 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
         <Pressable
           style={[
             styles.button,
-            carregando && { opacity: 0.6 },
+            (carregando || carregandoPerfil || Boolean(erroPerfil) || !dadosUsuario?.id_usuario)
+              && { opacity: 0.6 },
           ]}
           onPress={handleCriarRelato}
-          disabled={carregando}
+          disabled={
+            carregando
+            || carregandoPerfil
+            || Boolean(erroPerfil)
+            || !dadosUsuario?.id_usuario
+          }
         >
 
           <Ionicons
@@ -369,6 +467,10 @@ export default function CriarRelato({ setScreen, usuario, dadosUsuario }) {
           <Text style={styles.buttonText}>
             {carregando
               ? "Criando..."
+              : carregandoPerfil || (!dadosUsuario?.id_usuario && !erroPerfil)
+                ? "Carregando cadastro..."
+                : erroPerfil
+                  ? "Cadastro indisponível"
               : "Criar relato"}
           </Text>
 
@@ -439,13 +541,12 @@ const styles = StyleSheet.create({
 
   header: {
     width: "100%",
-    paddingTop: 45,
+    paddingTop: 75,
     paddingBottom: 15,
-    marginBottom: 10,
     justifyContent: "space-between",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 25,
   },
 
   form: {
@@ -488,6 +589,81 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 15,
     color: "#e5e5e5",
+  },
+
+  categoryPlaceholder: {
+    color: "#8a8a8a",
+  },
+
+  categoryOptions: {
+    marginTop: -12,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: "#3a3a3a",
+    borderRadius: 12,
+    backgroundColor: "#161616",
+    overflow: "hidden",
+  },
+
+  categorySearch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2a2a2a",
+  },
+
+  categorySearchInput: {
+    flex: 1,
+    minHeight: 44,
+    color: "#e5e5e5",
+  },
+
+  noCategoryResults: {
+    padding: 14,
+    color: "#8a8a8a",
+  },
+
+  categoryOption: {
+    minHeight: 46,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#2a2a2a",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  categoryOptionText: {
+    color: "#e5e5e5",
+  },
+
+  profileNotice: {
+    color: "#facc15",
+    marginBottom: 14,
+  },
+
+  profileErrorBox: {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: "#2e270f",
+  },
+
+  profileErrorText: {
+    color: "#fca5a5",
+  },
+
+  profileRetryButton: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+  },
+
+  profileRetryText: {
+    color: "#22c55e",
+    fontWeight: "bold",
   },
 
   textArea: {

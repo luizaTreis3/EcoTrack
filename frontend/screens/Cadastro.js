@@ -1,5 +1,10 @@
 import React, { useState } from "react";
 import { API_URL } from "../src/services/api";
+import {
+  formatarCep,
+  formatarCpfBrasileiro,
+  formatarTelefoneBrasileiro,
+} from "../src/services/inputMasks";
 
 import {
   View,
@@ -120,7 +125,7 @@ export default function Cadastro({ setScreen }) {
           cep: cep.trim(),
           endereco: endereco.trim(),
           telefone: telefone.trim(),
-          cpf: cpf.trim(),
+          cpf: cpf.replace(/\D/g, ""),
           senha: senha,
           aceitou_termos: aceitouTermos,
           deseja_notificacoes: desejaNotificacoes,
@@ -311,8 +316,9 @@ export default function Cadastro({ setScreen }) {
           placeholder="CEP*"
           placeholderTextColor="#fff"
           value={cep}
-          onChangeText={setCep}
+          onChangeText={(value) => setCep(formatarCep(value))}
           keyboardType="numeric"
+          maxLength={9}
         />
 
         {/* ENDEREÇO */}
@@ -330,8 +336,9 @@ export default function Cadastro({ setScreen }) {
           placeholder="Telefone*"
           placeholderTextColor="#fff"
           value={telefone}
-          onChangeText={setTelefone}
+          onChangeText={(value) => setTelefone(formatarTelefoneBrasileiro(value))}
           keyboardType="phone-pad"
+          maxLength={15}
         />
 
         {/* CPF */}
@@ -340,8 +347,9 @@ export default function Cadastro({ setScreen }) {
           placeholder="CPF*"
           placeholderTextColor="#fff"
           value={cpf}
-          onChangeText={setCpf}
+          onChangeText={(value) => setCpf(formatarCpfBrasileiro(value))}
           keyboardType="numeric"
+          maxLength={14}
         />
 
         {/* SENHA */}
@@ -494,7 +502,7 @@ const styles = StyleSheet.create({
 
   header: {
     width: "100%",
-    paddingTop: 45,
+    paddingTop: 75,
     paddingBottom: 15,
     marginBottom: 5,
     flexDirection: "row",

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import AppNavigator from "../src/navigation/AppNavigator";
 import { API_URL } from "../src/services/api";
+import {
+  observePushNotification,
+  registerPushToken,
+} from "../src/services/pushNotifications";
 
 import Login from "./Login";
 import Cadastro from "./Cadastro";
@@ -12,6 +16,7 @@ import Desafios from "./Desafios";
 import Infos from "./Infos";
 import PerfilConfiguracao from "./PerfilConfiguracao";
 import RegistrarReciclagem from "./RegistrarReciclagem";
+import Notificacoes from "./Notificacoes";
 
 export default function App() {
   const [screen, setScreen] = useState("Login");
@@ -22,6 +27,8 @@ export default function App() {
   const [carregandoPerfil, setCarregandoPerfil] = useState(false);
   const [erroPerfil, setErroPerfil] = useState("");
   const [tentativaPerfil, setTentativaPerfil] = useState(0);
+
+  useEffect(() => observePushNotification(() => setScreen("Notificacoes")), []);
 
   useEffect(() => {
     let ativo = true;
@@ -85,6 +92,31 @@ export default function App() {
     };
   }, [usuario?.uid, tentativaPerfil]);
 
+  useEffect(() => {
+    const idUsuario = dadosUsuario?.id_usuario;
+    if (!idUsuario || Number(dadosUsuario.deseja_notificacoes) !== 1) {
+      return undefined;
+    }
+
+    let ativo = true;
+    registerPushToken(idUsuario)
+      .then((resultado) => {
+        if (ativo && resultado.status === "eas-not-configured") {
+          console.info("Push remoto pendente: configure o projeto EAS para habilitá-lo.");
+        }
+        if (ativo && resultado.status === "permission-denied") {
+          console.info("Notificações push não autorizadas nas configurações do dispositivo.");
+        }
+      })
+      .catch((error) => {
+        console.error("Erro ao registrar notificações push:", error);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [dadosUsuario?.id_usuario, dadosUsuario?.deseja_notificacoes]);
+
   function recarregarPerfil() {
     setTentativaPerfil((tentativaAtual) => tentativaAtual + 1);
   }
@@ -116,15 +148,27 @@ export default function App() {
           setScreen={setScreen}
           usuario={usuario}
           dadosUsuario={dadosUsuario}
+          carregandoPerfil={carregandoPerfil}
+          erroPerfil={erroPerfil}
+          onRetry={recarregarPerfil}
         />
       )}
 
       {screen === "RegistrarReciclagem" && (
-        <RegistrarReciclagem setScreen={setScreen} />
+        <RegistrarReciclagem
+          setScreen={setScreen}
+          dadosUsuario={dadosUsuario}
+        />
       )}
 
       {screen === "Home" && (
-        <Home setScreen={setScreen} />
+        <Home
+          setScreen={setScreen}
+          dadosUsuario={dadosUsuario}
+          carregandoPerfil={carregandoPerfil}
+          erroPerfil={erroPerfil}
+          onRetry={recarregarPerfil}
+        />
       )}
 
       {screen === "MeuPerfil" && (
@@ -140,7 +184,7 @@ export default function App() {
       )}
 
       {screen === "Desafios" && (
-        <Desafios setScreen={setScreen} />
+        <Desafios setScreen={setScreen} dadosUsuario={dadosUsuario} />
       )}
 
       {screen === "Infos" && (
@@ -149,6 +193,13 @@ export default function App() {
           dadosUsuario={dadosUsuario}
           carregandoPerfil={carregandoPerfil}
           erroPerfil={erroPerfil}
+        />
+      )}
+
+      {screen === "Notificacoes" && (
+        <Notificacoes
+          setScreen={setScreen}
+          dadosUsuario={dadosUsuario}
         />
       )}
 

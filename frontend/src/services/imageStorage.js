@@ -56,6 +56,9 @@ export async function appendImageToFormData(formData, asset) {
   if (!ALLOWED_IMAGE_TYPES.has(contentType.toLowerCase())) {
     throw new Error("O formato desta imagem não é compatível.");
   }
+  if (asset.fileSize > MAX_IMAGE_SIZE_BYTES) {
+    throw new Error("A imagem deve ter no máximo 5 MB.");
+  }
 
   const extension = contentType.split("/")[1]?.split(";")[0] || "jpeg";
   const fileName = asset.fileName || `imagem.${extension}`;
@@ -79,6 +82,40 @@ export async function appendImageToFormData(formData, asset) {
     uri: asset.uri,
     name: fileName,
     type: contentType,
+  });
+}
+
+export function sendFormData(url, options) {
+  if (Platform.OS === "web") {
+    return fetch(url, options);
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(options.method || "POST", url);
+    request.timeout = 30000;
+
+    Object.entries(options.headers || {}).forEach(([name, value]) => {
+      request.setRequestHeader(name, value);
+    });
+
+    request.onload = () => {
+      resolve({
+        ok: request.status >= 200 && request.status < 300,
+        status: request.status,
+        json: async () => {
+          try {
+            return JSON.parse(request.responseText);
+          } catch {
+            throw new Error("O servidor retornou uma resposta inválida.");
+          }
+        },
+      });
+    };
+    request.onerror = () => reject(new Error("Falha de conexão ao enviar os dados."));
+    request.ontimeout = () => reject(new Error("O envio dos dados excedeu o tempo limite."));
+    request.onabort = () => reject(new Error("O envio dos dados foi cancelado."));
+    request.send(options.body);
   });
 }
 

@@ -16,7 +16,12 @@ import {
   appendImageToFormData,
   getImageUrl,
   pickImageFromLibrary,
+  sendFormData,
 } from "../src/services/imageStorage";
+import {
+  formatarNumeroImpacto,
+  getDadosDesafiosUsuario,
+} from "../src/services/impactData";
 
 export default function MeuPerfil({
   setScreen,
@@ -31,6 +36,11 @@ export default function MeuPerfil({
   const [fotoPerfilUri, setFotoPerfilUri] = useState(null);
   const [erroFotoPerfil, setErroFotoPerfil] = useState("");
   const [alterandoFoto, setAlterandoFoto] = useState(false);
+  const [dadosImpacto, setDadosImpacto] = useState(null);
+  const [carregandoImpacto, setCarregandoImpacto] = useState(false);
+  const [erroImpacto, setErroImpacto] = useState("");
+  const [tentativaImpacto, setTentativaImpacto] = useState(0);
+  const idUsuario = dadosUsuario?.id_usuario;
 
   useEffect(() => {
     let ativo = true;
@@ -64,6 +74,46 @@ export default function MeuPerfil({
     };
   }, [dadosUsuario?.imagem_perfil]);
 
+  useEffect(() => {
+    let ativo = true;
+
+    if (!idUsuario) {
+      setDadosImpacto(null);
+      setCarregandoImpacto(false);
+      setErroImpacto("");
+      return () => {
+        ativo = false;
+      };
+    }
+
+    async function carregarImpacto() {
+      setCarregandoImpacto(true);
+      setErroImpacto("");
+
+      try {
+        const data = await getDadosDesafiosUsuario(idUsuario);
+        if (ativo) {
+          setDadosImpacto(data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar impacto do perfil:", error);
+        if (ativo) {
+          setErroImpacto(error.message || "Não foi possível carregar seu impacto.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoImpacto(false);
+        }
+      }
+    }
+
+    carregarImpacto();
+
+    return () => {
+      ativo = false;
+    };
+  }, [idUsuario, tentativaImpacto]);
+
   async function alterarFotoPerfil() {
     if (!usuario?.uid || !dadosUsuario) {
       Alert.alert("Perfil indisponível", "Carregue seus dados e tente novamente.");
@@ -91,7 +141,7 @@ export default function MeuPerfil({
       );
       await appendImageToFormData(formData, asset);
 
-      const response = await fetch(
+      const response = await sendFormData(
         `${API_URL}/usuarios/firebase/${encodeURIComponent(usuario.uid)}`,
         {
           method: "PUT",
@@ -126,8 +176,21 @@ export default function MeuPerfil({
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
     { label: "Desafios", screen: "Desafios", icon: "trophy-outline" },
     { label: "Relato", screen: "CriarRelato", icon: "create-outline" },
+    { label: "Notificações", screen: "Notificacoes", icon: "notifications-outline" },
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
+
+  const valoresImpacto = dadosImpacto?.impacto;
+  const valorImpacto = (valor, casasDecimais = 0) => {
+    if (carregandoImpacto || (carregandoPerfil && !idUsuario)) {
+      return "...";
+    }
+    if (!valoresImpacto || erroImpacto) {
+      return "—";
+    }
+    return formatarNumeroImpacto(valor, casasDecimais);
+  };
+  const pesoReciclado = valorImpacto(valoresImpacto?.kg_reciclados, 2);
 
   return (
     <View style={styles.container}>
@@ -278,26 +341,54 @@ export default function MeuPerfil({
               <View style={styles.impactIconCircle}>
                 <Ionicons name="leaf-outline" size={20} color="#22c55e" />
               </View>
-              <Text style={styles.impactValue}>12,4 kg</Text>
-              <Text style={styles.impactLabel}>CO² evitado</Text>
+              <Text style={styles.impactValue}>
+                {pesoReciclado === "..." || pesoReciclado === "—"
+                  ? pesoReciclado
+                  : `${pesoReciclado} kg`}
+              </Text>
+              <Text style={styles.impactLabel}>Kg reciclados aprovados</Text>
             </View>
 
             <View style={styles.impactStat}>
               <View style={styles.impactIconCircle}>
                 <Ionicons name="reload-outline" size={20} color="#22c55e" />
               </View>
-              <Text style={styles.impactValue}>23</Text>
-              <Text style={styles.impactLabel}>Materiais reciclados</Text>
+              <Text style={styles.impactValue}>
+                {valorImpacto(valoresImpacto?.reciclagens_aprovadas)}
+              </Text>
+              <Text style={styles.impactLabel}>Reciclagens aprovadas</Text>
             </View>
 
             <View style={styles.impactStat}>
               <View style={styles.impactIconCircle}>
-                <Ionicons name="cut-outline" size={20} color="#22c55e" />
+                <Ionicons name="checkmark-done-outline" size={20} color="#22c55e" />
               </View>
-              <Text style={styles.impactValue}>128</Text>
-              <Text style={styles.impactLabel}>Ações realizadas</Text>
+              <Text style={styles.impactValue}>
+                {valorImpacto(valoresImpacto?.relatos_resolvidos)}
+              </Text>
+              <Text style={styles.impactLabel}>Relatos resolvidos</Text>
+            </View>
+
+            <View style={styles.impactStat}>
+              <View style={styles.impactIconCircle}>
+                <Ionicons name="trophy-outline" size={20} color="#22c55e" />
+              </View>
+              <Text style={styles.impactValue}>
+                {valorImpacto(valoresImpacto?.desafios_participados)}
+              </Text>
+              <Text style={styles.impactLabel}>Desafios participados</Text>
             </View>
           </View>
+          {erroImpacto ? (
+            <Pressable
+              onPress={() => setTentativaImpacto((tentativa) => tentativa + 1)}
+              accessibilityRole="button"
+            >
+              <Text style={styles.impactError}>
+                {erroImpacto} Toque para tentar novamente.
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Conta */}
@@ -549,12 +640,13 @@ const styles = StyleSheet.create({
 
   impactStats: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
+    rowGap: 18,
   },
 
   impactStat: {
     alignItems: "center",
-    flex: 1,
+    width: "50%",
   },
 
   impactIconCircle: {
@@ -578,6 +670,14 @@ const styles = StyleSheet.create({
   impactLabel: {
     color: "#8a8a8a",
     fontSize: 11,
+    textAlign: "center",
+  },
+
+  impactError: {
+    color: "#fca5a5",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 16,
     textAlign: "center",
   },
 

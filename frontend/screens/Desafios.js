@@ -1,126 +1,86 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import TabBar from "./TabBar";
+import { API_URL } from "../src/services/api";
 
-export default function Desafios({ setScreen }) {
+export default function Desafios({ setScreen, dadosUsuario }) {
   const [tab, setTab] = useState("ativos");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [desafios, setDesafios] = useState([]);
+  const [ecoPoints, setEcoPoints] = useState(0);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  useEffect(() => {
+    let ativo = true;
+    const idUsuario = dadosUsuario?.id_usuario;
+
+    async function carregarDesafios() {
+      if (!idUsuario) {
+        setDesafios([]);
+        setEcoPoints(0);
+        setCarregando(false);
+        return;
+      }
+
+      setCarregando(true);
+      setErro("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/usuarios/${encodeURIComponent(idUsuario)}/desafios`
+        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.mensagem || "Não foi possível carregar os desafios.");
+        }
+
+        if (ativo) {
+          setDesafios(Array.isArray(data.desafios) ? data.desafios : []);
+          setEcoPoints(Number(data.eco_points) || 0);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar desafios:", error);
+        if (ativo) {
+          setErro(error.message || "Não foi possível carregar os desafios.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregando(false);
+        }
+      }
+    }
+
+    carregarDesafios();
+
+    return () => {
+      ativo = false;
+    };
+  }, [dadosUsuario?.id_usuario]);
 
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
     { label: "Desafios", screen: "Desafios", icon: "trophy-outline" },
     { label: "Relato", screen: "CriarRelato", icon: "create-outline" },
+    { label: "Notificações", screen: "Notificacoes", icon: "notifications-outline" },
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
 
-  const desafiosAtivos = [
-    {
-      icon: "reload-outline",
-      iconBg: "#0f2e1a",
-      iconColor: "#22c55e",
-      titulo: "Recicle 5 itens",
-      descricao: "Descarte corretamente 5 itens recicláveis.",
-      progresso: 3,
-      total: 5,
-      barColor: "#22c55e",
-      pontos: "+100",
-      pontosColor: "#22c55e",
-    },
-    {
-      icon: "water-outline",
-      iconBg: "#0f1f2e",
-      iconColor: "#3b82f6",
-      titulo: "Economize água",
-      descricao: "Reduza seu consumo de água em 20% durante 7 dias.",
-      progresso: 5,
-      total: 7,
-      barColor: "#3b82f6",
-      pontos: "+120",
-      pontosColor: "#3b82f6",
-    },
-    {
-      icon: "bicycle-outline",
-      iconBg: "#2e2410",
-      iconColor: "#f59e0b",
-      titulo: "Vá de bike",
-      descricao: "Utilize a bicicleta como meio de transporte por 5 dias.",
-      progresso: 2,
-      total: 5,
-      barColor: "#f59e0b",
-      pontos: "+80",
-      pontosColor: "#f59e0b",
-    },
-    {
-      icon: "bag-outline",
-      iconBg: "#1c1c1c",
-      iconColor: "#a3a3a3",
-      titulo: "Consumo consciente",
-      descricao: "Evite comprar por impulso e registre 3 compras conscientes.",
-      progresso: 1,
-      total: 3,
-      barColor: "#a3a3a3",
-      pontos: "+90",
-      pontosColor: "#a3a3a3",
-    },
-  ];
-
-  const desafiosConcluidos = [
-    {
-      icon: "reload-outline",
-      iconBg: "#0f2e1a",
-      iconColor: "#22c55e",
-      titulo: "Recicle 5 itens",
-      descricao: "Descarte corretamente 5 itens recicláveis.",
-      progresso: 5,
-      total: 5,
-      barColor: "#22c55e",
-      pontos: "+100",
-      pontosColor: "#22c55e",
-      dataConclusao: "02/05/2026",
-    },
-    {
-      icon: "water-outline",
-      iconBg: "#0f1f2e",
-      iconColor: "#3b82f6",
-      titulo: "Economize água",
-      descricao: "Reduza seu consumo de água em 20% durante 7 dias.",
-      progresso: 7,
-      total: 7,
-      barColor: "#3b82f6",
-      pontos: "+120",
-      pontosColor: "#3b82f6",
-      dataConclusao: "01/05/2026",
-    },
-    {
-      icon: "bicycle-outline",
-      iconBg: "#2e2410",
-      iconColor: "#f59e0b",
-      titulo: "Vá de bike",
-      descricao: "Utilize a bicicleta como meio de transporte por 5 dias.",
-      progresso: 5,
-      total: 5,
-      barColor: "#f59e0b",
-      pontos: "+80",
-      pontosColor: "#f59e0b",
-      dataConclusao: "29/04/2026",
-    },
-    {
-      icon: "bag-outline",
-      iconBg: "#1c1c1c",
-      iconColor: "#a3a3a3",
-      titulo: "Consumo consciente",
-      descricao: "Evite comprar por impulso e registre 3 compras conscientes.",
-      progresso: 3,
-      total: 3,
-      barColor: "#a3a3a3",
-      pontos: "+90",
-      pontosColor: "#a3a3a3",
-      dataConclusao: "26/04/2026",
-    },
-  ];
+  const desafioPrincipal = desafios[0];
+  const progresso = Number(desafioPrincipal?.progresso) || 0;
+  const meta = Number(desafioPrincipal?.meta) || 1;
+  const concluido = Boolean(desafioPrincipal?.concluido);
+  const desafiosAtivos = desafioPrincipal && !concluido ? [desafioPrincipal] : [];
+  const desafiosConcluidos = desafioPrincipal && concluido ? [desafioPrincipal] : [];
+  const progressoConcluido = desafiosConcluidos.length;
+  const totalDesafios = desafios.length;
+  const dataConclusao = desafioPrincipal?.data_conclusao
+    ? new Date(desafioPrincipal.data_conclusao).toLocaleDateString("pt-BR")
+    : "";
 
   return (
     <View style={styles.container}>
@@ -188,9 +148,15 @@ export default function Desafios({ setScreen }) {
 
             <View style={styles.progressCard}>
               <View style={styles.progressRingWrapper}>
-                <ProgressRing progress={5 / 8} size={80} strokeWidth={8} />
+                <ProgressRing
+                  progress={totalDesafios ? progressoConcluido / totalDesafios : 0}
+                  size={80}
+                  strokeWidth={8}
+                />
                 <View style={styles.progressRingTextWrapper}>
-                  <Text style={styles.progressRingValue}>5/8</Text>
+                  <Text style={styles.progressRingValue}>
+                    {progressoConcluido}/{totalDesafios}
+                  </Text>
                   <Text style={styles.progressRingLabel}>concluídos</Text>
                 </View>
               </View>
@@ -198,7 +164,7 @@ export default function Desafios({ setScreen }) {
               <View style={styles.progressCardTextWrapper}>
                 <Text style={styles.progressCardTitle}>Continue assim!</Text>
                 <Text style={styles.progressCardDescription}>
-                  Complete desafios e ganhe pontos enquanto faz a diferença.
+                  Você tem {ecoPoints} EcoPoints. Complete desafios para ganhar mais.
                 </Text>
               </View>
 
@@ -208,69 +174,53 @@ export default function Desafios({ setScreen }) {
             {/* Desafios ativos */}
             <View style={styles.listHeader}>
               <Text style={styles.sectionTitle}>Desafios ativos</Text>
-              <Pressable style={styles.sortRow}>
-                <Text style={styles.sortText}>Mais recentes</Text>
-                <Ionicons name="chevron-down" size={14} color="#22c55e" />
-              </Pressable>
             </View>
 
-            {desafiosAtivos.map((item, index) => (
-              <Pressable key={index} style={styles.challengeCard}>
-                <View style={[styles.challengeIcon, { backgroundColor: item.iconBg }]}>
-                  <Ionicons name={item.icon} size={22} color={item.iconColor} />
+            {erro ? <Text style={styles.loadError}>{erro}</Text> : null}
+            {carregando ? (
+              <Text style={styles.emptyMessage}>Carregando desafio...</Text>
+            ) : desafiosAtivos.map((item) => (
+              <Pressable
+                key={item.id_desafio}
+                style={styles.challengeCard}
+                onPress={() => setScreen("RegistrarReciclagem")}
+                accessibilityRole="button"
+                accessibilityLabel="Registrar reciclagem para avançar no desafio"
+              >
+                <View style={[styles.challengeIcon, { backgroundColor: "#0f2e1a" }]}>
+                  <Ionicons name="reload-outline" size={22} color="#22c55e" />
                 </View>
-
                 <View style={styles.challengeInfo}>
                   <Text style={styles.challengeTitle}>{item.titulo}</Text>
                   <Text style={styles.challengeDescription}>{item.descricao}</Text>
-
                   <View style={styles.progressBarBackground}>
                     <View
                       style={[
                         styles.progressBarFill,
                         {
-                          width: `${(item.progresso / item.total) * 100}%`,
-                          backgroundColor: item.barColor,
+                          width: `${Math.min(100, (Number(item.progresso) / Number(item.meta)) * 100)}%`,
+                          backgroundColor: "#22c55e",
                         },
                       ]}
                     />
                   </View>
                   <Text style={styles.progressBarLabel}>
-                    {item.progresso}/{item.total}
+                    {item.progresso}/{item.meta} registros aprovados
                   </Text>
+                  <Text style={styles.challengeAction}>Toque para registrar reciclagem</Text>
                 </View>
-
                 <View style={styles.challengeRight}>
-                  <Text style={[styles.challengePoints, { color: item.pontosColor }]}>
-                    {item.pontos}
+                  <Text style={[styles.challengePoints, { color: "#22c55e" }]}>
+                    +{item.recompensa}
                   </Text>
-                  <Ionicons name="chevron-forward" size={18} color="#8a8a8a" />
                 </View>
               </Pressable>
             ))}
-
-            {/* Desafio da semana */}
-            <View style={styles.weekCard}>
-              <View style={styles.weekIcon}>
-                <Ionicons name="trophy" size={22} color="#22c55e" />
-              </View>
-
-              <View style={styles.challengeInfo}>
-                <Text style={styles.weekTitle}>Desafio da semana</Text>
-                <Text style={styles.challengeDescription}>
-                  Complete todos os desafios ativos e ganhe bônus especial!
-                </Text>
-
-                <View style={styles.progressBarBackground}>
-                  <View style={[styles.progressBarFill, { width: "0%", backgroundColor: "#22c55e" }]} />
-                </View>
-                <Text style={styles.progressBarLabel}>0/4</Text>
-              </View>
-
-              <View style={styles.giftIcon}>
-                <Ionicons name="gift-outline" size={20} color="#22c55e" />
-              </View>
-            </View>
+            {!carregando && !erro && desafiosAtivos.length === 0 ? (
+              <Text style={styles.emptyMessage}>
+                Você não tem desafios ativos neste momento.
+              </Text>
+            ) : null}
           </>
         ) : (
           <>
@@ -283,7 +233,9 @@ export default function Desafios({ setScreen }) {
               <View style={styles.congratsTextWrapper}>
                 <Text style={styles.congratsTitle}>Parabéns!</Text>
                 <Text style={styles.congratsDescription}>
-                  Você concluiu 4 desafios e está fazendo a diferença todos os dias!
+                  {progressoConcluido
+                    ? `Você concluiu ${progressoConcluido} desafio e está fazendo a diferença!`
+                    : "Seus desafios concluídos aparecerão aqui."}
                 </Text>
               </View>
             </View>
@@ -292,90 +244,65 @@ export default function Desafios({ setScreen }) {
             <View style={styles.summaryRow}>
               <View style={styles.summaryCard}>
                 <Ionicons name="ribbon-outline" size={22} color="#22c55e" />
-                <Text style={styles.summaryValue}>8</Text>
+                <Text style={styles.summaryValue}>{progressoConcluido}</Text>
                 <Text style={styles.summaryLabel}>Desafios concluídos</Text>
               </View>
 
               <View style={styles.summaryCard}>
                 <Ionicons name="flag-outline" size={22} color="#22c55e" />
-                <Text style={styles.summaryValue}>+1.250</Text>
-                <Text style={styles.summaryLabel}>Pontos conquistados</Text>
+                <Text style={styles.summaryValue}>{ecoPoints}</Text>
+                <Text style={styles.summaryLabel}>EcoPoints</Text>
               </View>
             </View>
 
             {/* Desafios concluídos */}
             <View style={styles.listHeader}>
               <Text style={styles.sectionTitle}>Desafios concluídos</Text>
-              <Pressable style={styles.sortRow}>
-                <Text style={styles.sortText}>Mais recentes</Text>
-                <Ionicons name="chevron-down" size={14} color="#22c55e" />
-              </Pressable>
             </View>
 
-            {desafiosConcluidos.map((item, index) => (
-              <Pressable key={index} style={styles.challengeCard}>
-                <View style={[styles.challengeIcon, { backgroundColor: item.iconBg }]}>
-                  <Ionicons name={item.icon} size={22} color={item.iconColor} />
+            {erro ? <Text style={styles.loadError}>{erro}</Text> : null}
+            {carregando ? (
+              <Text style={styles.emptyMessage}>Carregando desafio...</Text>
+            ) : desafiosConcluidos.map((item) => (
+              <Pressable key={item.id_desafio} style={styles.challengeCard}>
+                <View style={[styles.challengeIcon, { backgroundColor: "#0f2e1a" }]}>
+                  <Ionicons name="reload-outline" size={22} color="#22c55e" />
                 </View>
-
                 <View style={styles.challengeInfo}>
                   <Text style={styles.challengeTitle}>{item.titulo}</Text>
                   <Text style={styles.challengeDescription}>{item.descricao}</Text>
-
                   <View style={styles.progressBarBackground}>
                     <View
                       style={[
                         styles.progressBarFill,
-                        {
-                          width: `${(item.progresso / item.total) * 100}%`,
-                          backgroundColor: item.barColor,
-                        },
+                        { width: "100%", backgroundColor: "#22c55e" },
                       ]}
                     />
                   </View>
                   <View style={styles.completedRow}>
                     <Text style={styles.completedDate}>
-                      Concluído em {item.dataConclusao}
+                      Concluído em {dataConclusao}
                     </Text>
                     <Text style={styles.progressBarLabel}>
-                      {item.progresso}/{item.total}
+                      {item.progresso}/{item.meta}
                     </Text>
                   </View>
                 </View>
-
                 <View style={styles.challengeRight}>
-                  <View style={[styles.checkCircle, { borderColor: item.iconColor }]}>
-                    <Ionicons name="checkmark" size={18} color={item.iconColor} />
+                  <View style={[styles.checkCircle, { borderColor: "#22c55e" }]}>
+                    <Ionicons name="checkmark" size={18} color="#22c55e" />
                   </View>
-                  <Text style={[styles.challengePoints, { color: item.pontosColor }]}>
-                    {item.pontos}
+                  <Text style={[styles.challengePoints, { color: "#22c55e" }]}>
+                    +{item.recompensa}
                   </Text>
                 </View>
               </Pressable>
             ))}
-
-            {/* EcoMembro */}
-            <View style={styles.weekCard}>
-              <View style={styles.weekIcon}>
-                <Ionicons name="trophy" size={22} color="#22c55e" />
-              </View>
-
-              <View style={styles.challengeInfo}>
-                <Text style={styles.weekTitle}>Você é um EcoMembro incrível!</Text>
-                <Text style={styles.challengeDescription}>
-                  Continue assim e inspire mais pessoas a cuidar do planeta.
-                </Text>
-
-                <View style={styles.progressBarBackground}>
-                  <View style={[styles.progressBarFill, { width: "100%", backgroundColor: "#22c55e" }]} />
-                </View>
-                <Text style={styles.progressBarLabel}>4/4</Text>
-              </View>
-
-              <View style={styles.giftIcon}>
-                <Ionicons name="gift-outline" size={20} color="#22c55e" />
-              </View>
-            </View>
+            {!carregando && !erro && desafiosConcluidos.length === 0 ? (
+              <Text style={styles.emptyMessage}>
+                Você ainda não concluiu nenhum desafio.
+              </Text>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -525,6 +452,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
+  emptyMessage: {
+    color: "#8a8a8a",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+
+  loadError: {
+    color: "#fca5a5",
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+
   progressCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -652,6 +593,13 @@ const styles = StyleSheet.create({
   progressBarLabel: {
     color: "#8a8a8a",
     fontSize: 10,
+  },
+
+  challengeAction: {
+    color: "#22c55e",
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 6,
   },
 
   challengeRight: {

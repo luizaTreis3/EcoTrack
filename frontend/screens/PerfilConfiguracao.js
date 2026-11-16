@@ -6,6 +6,14 @@ import {
 } from "firebase/auth";
 import { API_URL } from "../src/services/api";
 import { auth } from "../src/services/firebaseConfig";
+import {
+  formatarCep,
+  formatarTelefoneBrasileiro,
+} from "../src/services/inputMasks";
+import {
+  formatarNumeroImpacto,
+  getDadosDesafiosUsuario,
+} from "../src/services/impactData";
 
 const configs = {
   pessoal: { title: "Informações pessoais", icon: "person-outline" },
@@ -39,16 +47,18 @@ export default function PerfilConfiguracao({
   const [telefone, setTelefone] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [enviandoLinkSenha, setEnviandoLinkSenha] = useState(false);
-  const [notificacoes, setNotificacoes] = useState(true);
-  const [emailNotificacoes, setEmailNotificacoes] = useState(true);
-  const [alertasColeta, setAlertasColeta] = useState(true);
-  const [atualizacoesRelatos, setAtualizacoesRelatos] = useState(true);
+  const [notificacoes, setNotificacoes] = useState(false);
+  const [salvandoNotificacoes, setSalvandoNotificacoes] = useState(false);
   const [localizacao, setLocalizacao] = useState(true);
   const [temaClaro, setTemaClaro] = useState(false);
   const [altoContraste, setAltoContraste] = useState(false);
   const [textoMaior, setTextoMaior] = useState(false);
   const [reduzirAnimacoes, setReduzirAnimacoes] = useState(false);
   const [idioma, setIdioma] = useState("Português (Brasil)");
+  const [dadosImpacto, setDadosImpacto] = useState(null);
+  const [carregandoImpacto, setCarregandoImpacto] = useState(false);
+  const [erroImpacto, setErroImpacto] = useState("");
+  const [tentativaImpacto, setTentativaImpacto] = useState(0);
 
   useEffect(() => {
     if (!dadosUsuario) {
@@ -57,10 +67,52 @@ export default function PerfilConfiguracao({
 
     setNome(dadosUsuario.nome_completo || "");
     setEmail(usuario?.email || dadosUsuario.email || "");
-    setCep(dadosUsuario.cep || "");
+    setCep(formatarCep(dadosUsuario.cep || ""));
     setEndereco(dadosUsuario.endereco || "");
-    setTelefone(dadosUsuario.telefone || "");
+    setTelefone(formatarTelefoneBrasileiro(dadosUsuario.telefone || ""));
+    setNotificacoes(Number(dadosUsuario.deseja_notificacoes) === 1);
   }, [dadosUsuario, usuario?.email]);
+
+  useEffect(() => {
+    let ativo = true;
+    const idUsuario = dadosUsuario?.id_usuario;
+
+    if (type !== "impacto" || !idUsuario) {
+      setDadosImpacto(null);
+      setCarregandoImpacto(false);
+      setErroImpacto("");
+      return () => {
+        ativo = false;
+      };
+    }
+
+    async function carregarImpacto() {
+      setCarregandoImpacto(true);
+      setErroImpacto("");
+
+      try {
+        const data = await getDadosDesafiosUsuario(idUsuario);
+        if (ativo) {
+          setDadosImpacto(data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar relatório de impacto:", error);
+        if (ativo) {
+          setErroImpacto(error.message || "Não foi possível carregar seu impacto.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoImpacto(false);
+        }
+      }
+    }
+
+    carregarImpacto();
+
+    return () => {
+      ativo = false;
+    };
+  }, [type, dadosUsuario?.id_usuario, tentativaImpacto]);
 
   async function enviarLinkAlteracaoSenha() {
     const emailConta = auth.currentUser?.email || usuario?.email;
@@ -150,7 +202,7 @@ export default function PerfilConfiguracao({
     }
   }
 
-  function renderSwitch(label, value, onValueChange, description) {
+  function renderSwitch(label, value, onValueChange, description, disabled = false) {
     return (
       <View style={styles.optionRow}>
         <View style={styles.optionText}>
@@ -160,11 +212,53 @@ export default function PerfilConfiguracao({
         <Switch
           value={value}
           onValueChange={onValueChange}
+          disabled={disabled}
           trackColor={{ false: "#3a3a3a", true: "#166534" }}
           thumbColor={value ? "#22c55e" : "#8a8a8a"}
         />
       </View>
     );
+  }
+
+  async function salvarPreferenciaNotificacoes(valor) {
+    if (!dadosUsuario?.id_usuario) {
+      Alert.alert("Erro", "Não foi possível identificar seu cadastro.");
+      return;
+    }
+
+    const valorAnterior = notificacoes;
+    setNotificacoes(valor);
+    setSalvandoNotificacoes(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/usuarios/${encodeURIComponent(dadosUsuario.id_usuario)}/notificacoes/preferencias`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deseja_notificacoes: valor }),
+        }
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.mensagem || "Não foi possível atualizar as notificações.");
+      }
+
+      setDadosUsuario({
+        ...dadosUsuario,
+        deseja_notificacoes: valor ? 1 : 0,
+      });
+    } catch (error) {
+      console.error("Erro ao salvar preferência de notificações:", error);
+      setNotificacoes(valorAnterior);
+      Alert.alert(
+        "Erro",
+        error.message || "Não foi possível atualizar as notificações."
+      );
+    } finally {
+      setSalvandoNotificacoes(false);
+    }
   }
 
   function renderContent() {
@@ -189,9 +283,25 @@ export default function PerfilConfiguracao({
         <Text style={styles.label}>E-mail atual</Text>
         <TextInput value={email} editable={false} keyboardType="email-address" style={styles.input} placeholderTextColor="#8a8a8a" />
         <Text style={styles.label}>Telefone</Text>
-        <TextInput value={telefone} onChangeText={setTelefone} keyboardType="phone-pad" style={styles.input} placeholderTextColor="#8a8a8a" />
+        <TextInput
+          value={telefone}
+          onChangeText={(value) => setTelefone(formatarTelefoneBrasileiro(value))}
+          keyboardType="phone-pad"
+          style={styles.input}
+          placeholder="(00) 00000-0000"
+          placeholderTextColor="#8a8a8a"
+          maxLength={15}
+        />
         <Text style={styles.label}>CEP</Text>
-        <TextInput value={cep} onChangeText={setCep} keyboardType="numeric" style={styles.input} placeholderTextColor="#8a8a8a" />
+        <TextInput
+          value={cep}
+          onChangeText={(value) => setCep(formatarCep(value))}
+          keyboardType="numeric"
+          style={styles.input}
+          placeholder="00000-000"
+          placeholderTextColor="#8a8a8a"
+          maxLength={9}
+        />
         <Text style={styles.label}>Endereço</Text>
         <TextInput value={endereco} onChangeText={setEndereco} style={styles.input} placeholderTextColor="#8a8a8a" />
         <SaveButton
@@ -225,10 +335,18 @@ export default function PerfilConfiguracao({
 
     if (type === "notificacoes") {
       return <>
-        {renderSwitch("Notificações no celular", notificacoes, setNotificacoes, "Receba novidades e lembretes do EcoTrack.")}
-        {renderSwitch("Atualizações por e-mail", emailNotificacoes, setEmailNotificacoes, "Receba um resumo das suas atividades.")}
-        {renderSwitch("Atualizações sobre meus relatos", atualizacoesRelatos, setAtualizacoesRelatos, "Acompanhe quando um relato for recebido, atualizado ou resolvido.")}
-        {renderSwitch("Alertas de coleta", alertasColeta, setAlertasColeta, "Saiba quando a coleta estiver próxima.")}
+        {renderSwitch(
+          "Notificações do EcoTrack",
+          notificacoes,
+          salvarPreferenciaNotificacoes,
+          salvandoNotificacoes
+            ? "Salvando preferência..."
+            : "Receba atualizações de relatos selecionados e dos pontos de entrega que acompanha.",
+          salvandoNotificacoes
+        )}
+        <Text style={styles.description}>
+          A central de notificações fica disponível no aplicativo. O envio push será ativado após configurar o projeto EAS e instalar um development build.
+        </Text>
       </>;
     }
 
@@ -261,11 +379,62 @@ export default function PerfilConfiguracao({
     }
 
     if (type === "impacto") {
+      if (
+        carregandoImpacto
+        || (dadosUsuario?.id_usuario && !dadosImpacto && !erroImpacto)
+        || (carregandoPerfil && !dadosImpacto)
+      ) {
+        return <Text style={styles.intro}>Carregando seu impacto...</Text>;
+      }
+
+      if (!dadosImpacto?.impacto || erroImpacto) {
+        return <>
+          <Text style={styles.intro}>
+            {erroImpacto || "Não foi possível identificar sua conta para carregar o impacto."}
+          </Text>
+          <SaveButton
+            label={dadosUsuario?.id_usuario ? "Tentar novamente" : "Recarregar perfil"}
+            onPress={() => {
+              if (dadosUsuario?.id_usuario) {
+                setTentativaImpacto((tentativa) => tentativa + 1);
+              } else if (onRetry) {
+                onRetry();
+              }
+            }}
+          />
+        </>;
+      }
+
+      const impacto = dadosImpacto.impacto;
       return <>
-        <Text style={styles.intro}>Seu impacto positivo na cidade até agora.</Text>
-        <Stat label="CO² evitado" value="12,4 kg" icon="leaf-outline" />
-        <Stat label="Materiais reciclados" value="23" icon="reload-outline" />
-        <Stat label="Ações realizadas" value="128" icon="checkmark-circle-outline" />
+        <Text style={styles.intro}>
+          Seu progresso na cidade. Reciclagens pendentes não entram nestes números.
+        </Text>
+        <Stat
+          label="EcoPoints"
+          value={formatarNumeroImpacto(dadosImpacto.eco_points)}
+          icon="leaf-outline"
+        />
+        <Stat
+          label="Kg reciclados aprovados"
+          value={`${formatarNumeroImpacto(impacto.kg_reciclados, 2)} kg`}
+          icon="reload-outline"
+        />
+        <Stat
+          label="Reciclagens aprovadas"
+          value={formatarNumeroImpacto(impacto.reciclagens_aprovadas)}
+          icon="repeat-outline"
+        />
+        <Stat
+          label="Relatos resolvidos"
+          value={formatarNumeroImpacto(impacto.relatos_resolvidos)}
+          icon="checkmark-done-outline"
+        />
+        <Stat
+          label="Desafios participados"
+          value={formatarNumeroImpacto(impacto.desafios_participados)}
+          icon="trophy-outline"
+        />
       </>;
     }
 

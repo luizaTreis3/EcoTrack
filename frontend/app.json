@@ -26,7 +26,8 @@
       "favicon": "./assets/image/logoEcoTrackPreto.png"
     },
     "plugins": [
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-notifications"
     ]
   }
 }

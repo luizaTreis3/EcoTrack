@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
 
   header: {
     width: "100%",
-    paddingTop: 45,
+    paddingTop: 75,
     paddingBottom: 15,
     marginBottom: 20,
     justifyContent: "center",
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
 
   backButton: {
     position: "absolute",
-    top: 38,
+    top: 68,
     left: 20,
     width: 48,
     height: 48,
