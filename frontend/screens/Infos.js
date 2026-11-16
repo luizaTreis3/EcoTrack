@@ -16,10 +16,39 @@ import TabBar from "./TabBar";
 import { API_URL } from "../src/services/api";
 import { getImageUrl } from "../src/services/imageStorage";
 import { scheduleTestNotification } from "../src/services/localNotifications";
+import EcopontosMap from "./EcopontosMap";
+
+const categoriasEcoponto = [
+  { nome: "Todas", icon: "reload-outline", cor: "#22c55e", termos: [] },
+  { nome: "Papel", icon: "document-text-outline", cor: "#3b82f6", termos: ["papel", "materiais recicláveis"] },
+  { nome: "Plástico", icon: "flask-outline", cor: "#ef4444", termos: ["plástico", "materiais recicláveis"] },
+  { nome: "Vidro", icon: "wine-outline", cor: "#166534", termos: ["vidro", "materiais recicláveis"] },
+  { nome: "Metal", icon: "hardware-chip-outline", cor: "#facc15", termos: ["metal", "ferro", "sucata", "materiais recicláveis"] },
+  { nome: "Entulho", icon: "construct-outline", cor: "#f97316", termos: ["entulho", "caliça", "cerâmica", "terra"] },
+  { nome: "Móveis", icon: "bed-outline", cor: "#a78bfa", termos: ["móveis", "colchões"] },
+  { nome: "Madeira", icon: "hammer-outline", cor: "#b45309", termos: ["madeiras"] },
+  { nome: "Galhos e podas", icon: "leaf-outline", cor: "#22c55e", termos: ["galhos", "jardinagem"] },
+  { nome: "Pneus", icon: "ellipse-outline", cor: "#94a3b8", termos: ["pneus"] },
+  { nome: "Eletrodomésticos", icon: "tv-outline", cor: "#38bdf8", termos: ["eletrodomésticos"] },
+  { nome: "Resíduos domésticos", icon: "home-outline", cor: "#fb923c", termos: ["resíduos domésticos"] },
+  { nome: "Recicláveis", icon: "repeat-outline", cor: "#34d399", termos: ["materiais recicláveis"] },
+];
+
+function pontoAceitaCategoria(ponto, categoria) {
+  if (categoria === "Todas") {
+    return true;
+  }
+
+  const termos = categoriasEcoponto.find((item) => item.nome === categoria)?.termos || [];
+  const residuosAceitos = String(ponto.tipo_residuo || "").toLowerCase();
+
+  return termos.some((termo) => residuosAceitos.includes(termo));
+}
 
 export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroPerfil,
 }) {
-  const [categoriaAtiva, setCategoriaAtiva] = useState("Todas");
+  const [categoriaEcopontoAtiva, setCategoriaEcopontoAtiva] = useState("Todas");
+  const [mapaExpandido, setMapaExpandido] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [relatos, setRelatos] = useState([]);
   const [relatoSelecionado, setRelatoSelecionado] = useState(null);
@@ -205,20 +234,10 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
     };
   }, [dadosUsuario?.id_usuario]);
 
-  async function salvarBairroColeta() {
+  async function atualizarBairroColeta(bairro) {
     const idUsuario = dadosUsuario?.id_usuario;
-    const bairro = bairroDigitado.trim();
-
     if (!idUsuario) {
-      Alert.alert("Atenção", "Entre na sua conta para salvar o bairro da coleta.");
-      return;
-    }
-    if (!bairro) {
-      setErroAgenda("Informe o bairro da sua residência.");
-      return;
-    }
-    if (bairro.length > 100) {
-      setErroAgenda("O bairro deve ter no máximo 100 caracteres.");
+      Alert.alert("Atenção", "Entre na sua conta para acompanhar a coleta do bairro.");
       return;
     }
 
@@ -237,16 +256,40 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.mensagem || "Não foi possível salvar seu bairro.");
+        throw new Error(data.mensagem || "Não foi possível atualizar o acompanhamento da coleta.");
       }
 
-      setBairroColeta(data.bairro_coleta || bairro);
+      const bairroSalvo = data.bairro_coleta || "";
+      setBairroColeta(bairroSalvo);
+      setBairroDigitado(bairroSalvo);
+      if (!bairroSalvo) {
+        setAgendasColeta([]);
+      }
     } catch (error) {
-      console.error("Erro ao salvar bairro da coleta:", error);
-      setErroAgenda(error.message || "Não foi possível salvar seu bairro.");
+      console.error("Erro ao atualizar acompanhamento da coleta:", error);
+      setErroAgenda(error.message || "Não foi possível atualizar o acompanhamento da coleta.");
     } finally {
       setSalvandoBairro(false);
     }
+  }
+
+  async function salvarBairroColeta() {
+    const bairro = bairroDigitado.trim();
+
+    if (!bairro) {
+      setErroAgenda("Informe o bairro da sua residência.");
+      return;
+    }
+    if (bairro.length > 100) {
+      setErroAgenda("O bairro deve ter no máximo 100 caracteres.");
+      return;
+    }
+
+    await atualizarBairroColeta(bairro);
+  }
+
+  async function pararAcompanharColeta() {
+    await atualizarBairroColeta("");
   }
 
   async function alterarAcompanhamento(ponto) {
@@ -286,6 +329,15 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
     }
   }
 
+  async function abrirEmailEcoponto(email) {
+    try {
+      await Linking.openURL(`mailto:${email}`);
+    } catch (error) {
+      console.error("Erro ao abrir o e-mail do Ecoponto:", error);
+      Alert.alert("Erro", "Não foi possível abrir o aplicativo de e-mail.");
+    }
+  }
+
   const menuItems = [
     { label: "Início", screen: "Home", icon: "home-outline" },
     { label: "Infos", screen: "Infos", icon: "newspaper-outline" },
@@ -295,21 +347,17 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
     { label: "Perfil", screen: "MeuPerfil", icon: "person-outline" },
   ];
 
-  const categorias = [
-    { nome: "Todas", icon: "reload-outline", qtd: 24, color: "#22c55e" },
-    { nome: "Papel", icon: "document-text-outline", qtd: 6, color: "#3b82f6" },
-    { nome: "Plástico", icon: "flask-outline", qtd: 6, color: "#ef4444" },
-    { nome: "Vidro", icon: "wine-outline", qtd: 4, color: "#166534" },
-    { nome: "Metal", icon: "hardware-chip-outline", qtd: 4, color: "#facc15" },
-    { nome: "Orgânicos", icon: "leaf-outline", qtd: 4, color: "#92400e" },
-    { nome: "Perigoso", icon: "warning-outline", qtd: 2, color: "#f97316" },
-  ];
+  const pontosDaCategoria = pontosColeta.filter((ponto) =>
+    pontoAceitaCategoria(ponto, categoriaEcopontoAtiva)
+  );
 
-  const pontosFiltrados = pontosColeta.filter((ponto) =>
+  const pontosFiltrados = pontosDaCategoria.filter((ponto) =>
     `${ponto.nome} ${ponto.endereco} ${ponto.tipo_residuo}`
       .toLowerCase()
       .includes(buscaPonto.trim().toLowerCase())
   );
+  const jaAcompanhaBairroDigitado = Boolean(bairroColeta)
+    && bairroDigitado.trim().toLowerCase() === bairroColeta.trim().toLowerCase();
 
   return (
     <View style={styles.container}>
@@ -387,62 +435,42 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
         {/* Card do mapa */}
         <View style={styles.mapCard}>
           <View style={styles.mapVisual}>
-            <View style={styles.mapDot} />
-            <Ionicons name="location" size={22} color="#22c55e" style={{ position: "absolute", top: 20, left: 40 }} />
-            <Ionicons name="location" size={22} color="#22c55e" style={{ position: "absolute", top: 55, right: 50 }} />
-            <Ionicons name="location" size={22} color="#22c55e" style={{ position: "absolute", bottom: 15, left: 90 }} />
+            {carregandoPontos ? (
+              <View style={styles.mapLoading}>
+                <Text style={styles.mapLoadingText}>Carregando os Ecopontos...</Text>
+              </View>
+            ) : erroPontos ? (
+              <View style={styles.mapLoading}>
+                <Text style={styles.mapLoadingText}>Não foi possível carregar o mapa.</Text>
+              </View>
+            ) : (
+              <EcopontosMap pontos={pontosDaCategoria} expanded={mapaExpandido} />
+            )}
           </View>
 
           <Text style={styles.mapLabel}>Mapa interativo</Text>
-          <Text style={styles.mapTitle}>Pontos de coleta</Text>
+          <Text style={styles.mapTitle}>Ecopontos de São Leopoldo</Text>
           <Text style={styles.mapDescription}>
-            Encontre os pontos de coleta mais próximos de você.
+            Localize os três Ecopontos oficiais da cidade.
           </Text>
 
-          <Pressable style={styles.mapButton}>
-            <Text style={styles.mapButtonText}>Ver todos</Text>
-            <Ionicons name="chevron-forward" size={16} color="#000" />
+          <Pressable
+            style={styles.mapButton}
+            onPress={() => setMapaExpandido((expandido) => !expandido)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: mapaExpandido }}
+            accessibilityLabel={mapaExpandido ? "Recolher mapa" : "Expandir mapa e ver todos os Ecopontos"}
+          >
+            <Text style={styles.mapButtonText}>
+              {mapaExpandido ? "Ver menos" : "Ver todos"}
+            </Text>
+            <Ionicons
+              name={mapaExpandido ? "chevron-up" : "chevron-forward"}
+              size={16}
+              color="#000"
+            />
           </Pressable>
         </View>
-
-        {/* Filtrar por categoria */}
-        <View style={styles.listHeader}>
-          <Text style={styles.sectionTitle}>Filtrar por categoria</Text>
-          <Pressable style={styles.sortRow}>
-            <Text style={styles.sortText}>Ver todas</Text>
-            <Ionicons name="chevron-forward" size={14} color="#22c55e" />
-          </Pressable>
-        </View>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled
-          directionalLockEnabled
-          style={{ marginBottom: 28 }}
-        >
-          {categorias.map((cat, index) => (
-            <Pressable
-              key={index}
-              onPress={() => setCategoriaAtiva(cat.nome)}
-              style={[
-                styles.categoryChip,
-                categoriaAtiva === cat.nome && styles.categoryChipActive,
-              ]}
-            >
-              <Ionicons name={cat.icon} size={22} color={cat.color} />
-              <Text
-                style={[
-                  styles.categoryText,
-                  categoriaAtiva === cat.nome && styles.categoryTextActive,
-                ]}
-              >
-                {cat.nome}
-              </Text>
-              <Text style={styles.categoryQtd}>{cat.qtd}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
 
         {/* Meus relatos */}
         <Text style={[styles.sectionTitle, styles.meusRelatosTitle]}>
@@ -548,9 +576,9 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
           );
         })}
 
-        <Text style={styles.sectionTitle}>Coleta seletiva por bairro</Text>
+        <Text style={styles.sectionTitle}>Acompanhar coleta seletiva por bairro</Text>
         <Text style={styles.mapDescription}>
-          Informe seu bairro para consultar os dias, turnos e cooperativas da rota mais próxima.
+          Acompanhe seu bairro para consultar os dias e turnos da coleta e receber lembretes.
         </Text>
 
         <View style={styles.bairroColetaRow}>
@@ -560,22 +588,68 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
             placeholder="Ex.: Campestre, Centro ou Feitoria"
             placeholderTextColor="#8a8a8a"
             style={styles.bairroColetaInput}
+            accessibilityLabel="Bairro da coleta seletiva"
             maxLength={100}
             editable={!salvandoBairro}
           />
           <Pressable
             onPress={salvarBairroColeta}
-            disabled={salvandoBairro}
+            disabled={
+              salvandoBairro
+              || jaAcompanhaBairroDigitado
+            }
             style={[
               styles.bairroColetaButton,
               salvandoBairro && styles.bairroColetaButtonDisabled,
+              jaAcompanhaBairroDigitado && styles.bairroColetaButtonActive,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={
+              jaAcompanhaBairroDigitado
+                ? `Acompanhando coleta em ${bairroColeta}`
+                : bairroColeta
+                  ? "Atualizar bairro acompanhado"
+                  : "Acompanhar coleta neste bairro"
+            }
           >
-            <Text style={styles.bairroColetaButtonText}>
-              {salvandoBairro ? "Salvando..." : "Salvar"}
+            <Text
+              style={[
+                styles.bairroColetaButtonText,
+                jaAcompanhaBairroDigitado && styles.bairroColetaButtonTextActive,
+              ]}
+            >
+              {salvandoBairro
+                ? "Salvando..."
+                : jaAcompanhaBairroDigitado
+                  ? "Acompanhando"
+                  : bairroColeta
+                    ? "Atualizar"
+                  : "Acompanhar"}
             </Text>
           </Pressable>
         </View>
+
+        {bairroColeta ? (
+          <View style={styles.collectionFollowRow}>
+            <View style={styles.collectionFollowStatus}>
+              <Ionicons name="notifications" size={16} color="#22c55e" />
+              <Text style={styles.collectionFollowText}>
+                Acompanhando a coleta em {bairroColeta}
+              </Text>
+            </View>
+            <Pressable
+              onPress={pararAcompanharColeta}
+              disabled={salvandoBairro}
+              accessibilityRole="button"
+              accessibilityLabel={`Parar de acompanhar a coleta em ${bairroColeta}`}
+              style={styles.collectionStopButton}
+            >
+              <Text style={styles.collectionStopText}>
+                {salvandoBairro ? "Salvando..." : "Parar"}
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Pressable
           style={[styles.sourceLink, styles.coletaSourceLink]}
@@ -652,9 +726,68 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
 
         <View style={styles.scheduleNotice}>
           <Text style={styles.scheduleNoticeText}>
-            Estes Ecopontos recebem pneus, móveis, resíduos de poda e entulho. Não são pontos de entrega de recicláveis domésticos comuns. O calendário de coleta seletiva por bairro não foi confirmado pela fonte municipal e não é exibido aqui.
+            Os materiais aceitos variam por Ecoponto. Confira a lista de cada unidade antes de levar os resíduos.
           </Text>
         </View>
+
+        <View style={styles.listHeader}>
+          <Text style={styles.sectionTitle}>Filtrar por categoria</Text>
+          <Pressable
+            style={styles.sortRow}
+            onPress={() => setCategoriaEcopontoAtiva("Todas")}
+            accessibilityRole="button"
+            accessibilityLabel="Mostrar Ecopontos de todas as categorias"
+          >
+            <Text style={styles.sortText}>Ver todas</Text>
+            <Ionicons name="chevron-forward" size={14} color="#22c55e" />
+          </Pressable>
+        </View>
+        <Text style={styles.mapDescription}>
+          Escolha um material para ver os Ecopontos que o recebem.
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          directionalLockEnabled
+          style={{ marginBottom: 16 }}
+        >
+          {categoriasEcoponto.map((categoria) => {
+            const quantidade = pontosColeta.filter((ponto) =>
+              pontoAceitaCategoria(ponto, categoria.nome)
+            ).length;
+            const ativa = categoriaEcopontoAtiva === categoria.nome;
+
+            return (
+              <Pressable
+                key={categoria.nome}
+                onPress={() => setCategoriaEcopontoAtiva(categoria.nome)}
+                style={[
+                  styles.categoryChip,
+                  ativa && styles.categoryChipActive,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: ativa }}
+                accessibilityLabel={`${categoria.nome}: ${quantidade} Ecopontos`}
+              >
+                <Ionicons
+                  name={categoria.icon}
+                  size={22}
+                  color={categoria.cor}
+                />
+                <Text
+                  style={[
+                    styles.categoryText,
+                    ativa && styles.categoryTextActive,
+                  ]}
+                >
+                  {categoria.nome}
+                </Text>
+                <Text style={styles.categoryQtd}>{quantidade}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         <View style={styles.searchRow}>
           <View style={styles.searchBox}>
@@ -678,7 +811,7 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
           <Text style={styles.relatoError}>{erroPontos}</Text>
         ) : pontosFiltrados.length === 0 ? (
           <Text style={styles.relatoEmpty}>
-            Nenhum Ecoponto encontrado. Verifique se a migração de notificações e pontos foi aplicada.
+            Nenhum Ecoponto encontrado para essa categoria ou busca. Toque em “Ver todas” para remover o filtro.
           </Text>
         ) : (
           pontosFiltrados.map((ponto) => (
@@ -689,12 +822,29 @@ export default function Infos({ setScreen, dadosUsuario, carregandoPerfil, erroP
               <View style={styles.pontoInfo}>
                 <Text style={styles.pontoNome}>{ponto.nome}</Text>
                 <Text style={styles.pontoDescricao}>{ponto.endereco}</Text>
-                <Text style={styles.pontoDescricao}>{ponto.tipo_residuo}</Text>
+                {String(ponto.tipo_residuo || "")
+                  .split(";")
+                  .map((residuo) => residuo.trim())
+                  .filter(Boolean)
+                  .map((residuo, index) => (
+                    <Text key={`${ponto.id_ponto}-residuo-${index}`} style={styles.pontoDescricao}>
+                      {residuo}
+                    </Text>
+                  ))}
                 {ponto.horario_funcionamento ? (
                   <Text style={styles.pontoHorario}>{ponto.horario_funcionamento}</Text>
                 ) : null}
                 {ponto.telefone ? (
                   <Text style={styles.pontoDescricao}>Contato: {ponto.telefone}</Text>
+                ) : null}
+                {ponto.email ? (
+                  <Pressable
+                    onPress={() => abrirEmailEcoponto(ponto.email)}
+                    accessibilityRole="link"
+                    accessibilityLabel={`Enviar e-mail para ${ponto.email}`}
+                  >
+                    <Text style={styles.pontoEmail}>E-mail: {ponto.email}</Text>
+                  </Pressable>
                 ) : null}
                 {ponto.descricao ? (
                   <Text style={styles.pontoDescricao}>{ponto.descricao}</Text>
@@ -997,22 +1147,21 @@ const styles = StyleSheet.create({
   },
 
   mapVisual: {
-    height: 130,
     backgroundColor: "#0f1f14",
     borderRadius: 12,
     marginBottom: 14,
-    position: "relative",
     overflow: "hidden",
   },
 
-  mapDot: {
-    position: "absolute",
-    top: "45%",
-    left: "45%",
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: "#3b82f6",
+  mapLoading: {
+    height: 130,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  mapLoadingText: {
+    color: "#a5a5a5",
+    fontSize: 12,
   },
 
   mapLabel: {
@@ -1347,10 +1496,55 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
+  bairroColetaButtonActive: {
+    backgroundColor: "#14532d",
+  },
+
   bairroColetaButtonText: {
     color: "#0b0b0b",
     fontSize: 12,
     fontWeight: "bold",
+  },
+
+  bairroColetaButtonTextActive: {
+    color: "#e5e5e5",
+  },
+
+  collectionFollowRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    borderRadius: 10,
+    backgroundColor: "#0f1f14",
+  },
+
+  collectionFollowStatus: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    marginRight: 8,
+  },
+
+  collectionFollowText: {
+    flex: 1,
+    color: "#c5e8cf",
+    fontSize: 12,
+    lineHeight: 17,
+    marginLeft: 8,
+  },
+
+  collectionStopButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+
+  collectionStopText: {
+    color: "#f87171",
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   coletaSourceLink: {
@@ -1485,6 +1679,13 @@ const styles = StyleSheet.create({
 
   pontoDescricao: {
     color: "#a5a5a5",
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 3,
+  },
+
+  pontoEmail: {
+    color: "#22c55e",
     fontSize: 12,
     lineHeight: 17,
     marginBottom: 3,

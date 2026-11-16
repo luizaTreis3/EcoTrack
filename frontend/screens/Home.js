@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, Image } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import TabBar from "./TabBar";
 import { getDadosDesafiosUsuario } from "../src/services/impactData";
+import { API_URL } from "../src/services/api";
+import RelatosMap from "./RelatosMap";
 
 const dicasSustentaveis = [
   {
@@ -463,14 +465,19 @@ export default function Home({
   carregandoPerfil = false,
   erroPerfil = "",
   onRetry,
+  versaoRelatos = 0,
 }) {
-  const [busca, setBusca] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [dataDica, setDataDica] = useState(() => new Date());
   const [dadosPainel, setDadosPainel] = useState(null);
   const [carregandoPainel, setCarregandoPainel] = useState(false);
   const [erroPainel, setErroPainel] = useState("");
   const [tentativaPainel, setTentativaPainel] = useState(0);
+  const [relatos, setRelatos] = useState([]);
+  const [carregandoRelatos, setCarregandoRelatos] = useState(false);
+  const [erroRelatos, setErroRelatos] = useState("");
+  const [tentativaRelatos, setTentativaRelatos] = useState(0);
+  const [mapaRelatosExpandido, setMapaRelatosExpandido] = useState(false);
   const { dica, numero: numeroDica } = obterDicaDoDia(dataDica);
   const idUsuario = dadosUsuario?.id_usuario;
 
@@ -514,6 +521,64 @@ export default function Home({
       ativo = false;
     };
   }, [idUsuario, tentativaPainel]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    if (!idUsuario) {
+      setRelatos([]);
+      setCarregandoRelatos(false);
+      setErroRelatos("");
+      return () => {
+        ativo = false;
+      };
+    }
+
+    async function carregarRelatos() {
+      setCarregandoRelatos(true);
+      setErroRelatos("");
+
+      try {
+        const response = await fetch(
+          `${API_URL}/usuarios/${encodeURIComponent(idUsuario)}/relatos`
+        );
+        const contentType = response.headers.get("content-type") || "";
+
+        if (!contentType.toLowerCase().includes("application/json")) {
+          throw new Error(
+            response.status === 404
+              ? "A rota de relatos não foi encontrada no backend."
+              : "O backend retornou uma resposta inesperada ao carregar seus relatos."
+          );
+        }
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.mensagem || "Não foi possível carregar seus relatos.");
+        }
+
+        if (ativo) {
+          setRelatos(Array.isArray(data.relatos) ? data.relatos : []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar relatos no mapa da página inicial:", error);
+        if (ativo) {
+          setErroRelatos(error.message || "Não foi possível carregar seus relatos.");
+        }
+      } finally {
+        if (ativo) {
+          setCarregandoRelatos(false);
+        }
+      }
+    }
+
+    carregarRelatos();
+
+    return () => {
+      ativo = false;
+    };
+  }, [idUsuario, tentativaRelatos, versaoRelatos]);
 
   useEffect(() => {
     const agora = new Date();
@@ -811,40 +876,74 @@ export default function Home({
       {/* Mapa */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Mapa de relatos</Text>
+        <Text style={styles.mapDescription}>
+          Veja a localização, a categoria e o status dos relatos que você cadastrou.
+        </Text>
 
-        <View style={styles.searchRow}>
-          <View style={styles.searchInputWrapper}>
-            <Ionicons name="search" size={18} color="#22c55e" style={{ marginRight: 8 }} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Buscar no mapa"
-              placeholderTextColor="#8a8a8a"
-              value={busca}
-              onChangeText={setBusca}
-            />
-          </View>
-          <Pressable style={styles.filterButton}>
-            <Ionicons name="funnel-outline" size={18} color="#e5e5e5" />
+        {carregandoPerfil || carregandoRelatos ? (
+          <Text style={styles.mapState}>Carregando seus relatos...</Text>
+        ) : erroPerfil || erroRelatos ? (
+          <Pressable
+            onPress={() => {
+              if (erroPerfil && onRetry) {
+                onRetry();
+              } else {
+                setTentativaRelatos((tentativa) => tentativa + 1);
+              }
+            }}
+            accessibilityRole="button"
+          >
+            <Text style={styles.mapError}>
+              {erroPerfil || `${erroRelatos} Toque para tentar novamente.`}
+            </Text>
           </Pressable>
-        </View>
-
-        {/* Mockup visual do mapa - trocar por MapView real depois */}
-        <View style={styles.mapMock}>
-          <View style={styles.mapZoomControls}>
-            <View style={styles.mapZoomBtn}>
-              <Ionicons name="add" size={16} color="#e5e5e5" />
+        ) : (
+          <View style={styles.reportMapCard}>
+            <RelatosMap relatos={relatos} expanded={mapaRelatosExpandido} />
+            <View style={styles.reportMapLegend}>
+              <View style={styles.reportMapLegendItem}>
+                <View style={[styles.reportMapLegendDot, { backgroundColor: "#ef4444" }]} />
+                <Text style={styles.reportMapLegendText}>Pendente</Text>
+              </View>
+              <View style={styles.reportMapLegendItem}>
+                <View style={[styles.reportMapLegendDot, { backgroundColor: "#3b82f6" }]} />
+                <Text style={styles.reportMapLegendText}>Em análise</Text>
+              </View>
+              <View style={styles.reportMapLegendItem}>
+                <View style={[styles.reportMapLegendDot, { backgroundColor: "#22c55e" }]} />
+                <Text style={styles.reportMapLegendText}>Resolvido</Text>
+              </View>
             </View>
-            <View style={styles.mapZoomBtn}>
-              <Ionicons name="remove" size={16} color="#e5e5e5" />
-            </View>
+            {relatos.length === 0 ? (
+              <Pressable
+                style={styles.mapButton}
+                onPress={() => setScreen("CriarRelato")}
+                accessibilityRole="button"
+              >
+                <Text style={styles.mapButtonText}>Criar primeiro relato</Text>
+                <Ionicons name="chevron-forward" size={16} color="#000" />
+              </Pressable>
+            ) : (
+              <Pressable
+                style={styles.mapButton}
+                onPress={() => setMapaRelatosExpandido((expandido) => !expandido)}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: mapaRelatosExpandido }}
+                accessibilityLabel={mapaRelatosExpandido ? "Recolher mapa dos relatos" : "Expandir mapa dos relatos"}
+              >
+                <Text style={styles.mapButtonText}>
+                  {mapaRelatosExpandido ? "Ver menos" : "Ver mapa completo"}
+                </Text>
+                <Ionicons
+                  name={mapaRelatosExpandido ? "chevron-up" : "chevron-forward"}
+                  size={16}
+                  color="#000"
+                />
+              </Pressable>
+            )}
           </View>
-          
-          <MapPin label="Categoria: lixo" color="#ef4444" style={{ top: 14, right: 30 }} />
-          <MapPin label="Categoria: esgoto" color="#22c55e" style={{ top: 70, left: 10 }} />
-          <MapPin label="Categoria: infraestrutura" color="#222dc5" style={{ top: 130, left: 60 }} />
-          <MapPin label="Categoria: água" color="#22c55e" style={{ top: 165, left: 190 }} />
+        )}
         </View>
-      </View>
       
       {/* Dica sustentável */}
       <View style={styles.section}>
@@ -864,19 +963,6 @@ export default function Home({
       </View>
     </ScrollView>
     <TabBar active="Home" setScreen={setScreen} />
-    </View>
-  );
-}
-
-function MapPin({ label, color, style }) {
-  return (
-    <View style={[{ position: "absolute", alignItems: "center" }, style]}>
-      <Ionicons name="location" size={26} color={color} />
-      {label && (
-        <View style={styles.mapPinLabel}>
-          <Text style={styles.mapPinLabelText}>{label}</Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -1194,78 +1280,74 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 
-  searchRow: {
+  mapDescription: {
+    color: "#8a8a8a",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+
+  mapState: {
+    color: "#a3a3a3",
+    fontSize: 13,
+  },
+
+  mapError: {
+    color: "#fca5a5",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
+  reportMapCard: {
+    borderWidth: 1,
+    borderColor: "#262626",
+    backgroundColor: "#161616",
+    borderRadius: 16,
+    padding: 14,
+  },
+
+  reportMapLegend: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    marginTop: 12,
     marginBottom: 14,
   },
 
-  searchInputWrapper: {
-    flex: 1,
+  reportMapLegendItem: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#3a3a3a",
-    backgroundColor: "#161616",
-    borderRadius: 12,
+    gap: 5,
+  },
+
+  reportMapLegendDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+
+  reportMapLegendText: {
+    color: "#a3a3a3",
+    fontSize: 11,
+  },
+
+  mapButton: {
+    backgroundColor: "#22c55e",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    paddingVertical: 10,
     paddingHorizontal: 14,
-    marginRight: 10,
+    borderRadius: 10,
   },
 
-  searchInput: {
-    flex: 1,
-    paddingVertical: 12,
-    color: "#e5e5e5",
-  },
-
-  filterButton: {
-    width: 46,
-    borderWidth: 1,
-    borderColor: "#3a3a3a",
-    backgroundColor: "#161616",
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  mapMock: {
-    height: 220,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#262626",
-    backgroundColor: "#141b16",
-    overflow: "hidden",
-  },
-
-  mapZoomControls: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    zIndex: 2,
-  },
-
-  mapZoomBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: "#1f1f1f",
-    borderWidth: 1,
-    borderColor: "#3a3a3a",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-
-  mapPinLabel: {
-    backgroundColor: "#1f1f1f",
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 2,
-  },
-
-  mapPinLabelText: {
-    color: "#e5e5e5",
-    fontSize: 8,
+  mapButtonText: {
+    color: "#000",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginRight: 4,
   },
 
   dicaCard: {

@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import TabBar from "./TabBar";
 import { API_URL } from "../src/services/api";
 import {
@@ -20,6 +21,7 @@ import {
 
 export default function CriarRelato({
   setScreen,
+  onRelatoCriado,
   usuario,
   dadosUsuario,
   carregandoPerfil = false,
@@ -40,6 +42,7 @@ export default function CriarRelato({
   const [imagemRelato, setImagemRelato] = useState(null);
 
   const [carregando, setCarregando] = useState(false);
+  const [obtendoLocalizacao, setObtendoLocalizacao] = useState(false);
   const categoriasRelato = ["Lixo", "Esgoto", "Infraestrutura", "Água", "Outros"];
   const categoriasFiltradas = categoriasRelato.filter((opcao) =>
     opcao
@@ -111,13 +114,41 @@ export default function CriarRelato({
     }
 
     setCarregando(true);
+    setObtendoLocalizacao(true);
 
     try {
+      const permissao = await Location.requestForegroundPermissionsAsync();
+      if (permissao.status !== "granted") {
+        throw new Error(
+          "Permita o acesso à localização para posicionar o relato. Você pode ativá-lo nas configurações do dispositivo."
+        );
+      }
+
+      const localizacao = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const { latitude, longitude } = localizacao.coords;
+
+      if (
+        !Number.isFinite(latitude)
+        || !Number.isFinite(longitude)
+        || latitude < -90
+        || latitude > 90
+        || longitude < -180
+        || longitude > 180
+      ) {
+        throw new Error("Não foi possível obter uma localização válida.");
+      }
+
+      setObtendoLocalizacao(false);
+
       const relato = {
         id_usuario: idUsuario,
         titulo: titulo.trim(),
         bairro: bairro.trim(),
         endereco: endereco.trim(),
+        latitude,
+        longitude,
         categoria: categoria.trim(),
         descricao: descricao.trim(),
         atualizar_status: atualizarStatus,
@@ -153,6 +184,8 @@ export default function CriarRelato({
         throw new Error(data.mensagem || "Não foi possível criar o relato.");
       }
 
+      onRelatoCriado?.();
+
       Alert.alert(
         "Sucesso!",
         "Relato criado com sucesso!"
@@ -166,7 +199,7 @@ export default function CriarRelato({
       setDescricao("");
       setAtualizarStatus(false);
       setImagemRelato(null);
-      setScreen("Infos");
+      setScreen("Home");
 
     } catch (error) {
       console.error("Erro ao criar relato:", error);
@@ -177,6 +210,7 @@ export default function CriarRelato({
       );
 
     } finally {
+      setObtendoLocalizacao(false);
       setCarregando(false);
     }
   }
@@ -338,6 +372,11 @@ export default function CriarRelato({
           onChangeText={setEndereco}
         />
 
+        <Text style={styles.locationTitle}>Localização do relato*</Text>
+        <Text style={styles.locationDescription}>
+          Ao enviar, usaremos a localização atual do aparelho. Esteja no local informado no endereço.
+        </Text>
+
         {/* CATEGORIA */}
         <Pressable
           style={styles.inputWithIcon}
@@ -466,7 +505,9 @@ export default function CriarRelato({
 
           <Text style={styles.buttonText}>
             {carregando
-              ? "Criando..."
+              ? obtendoLocalizacao
+                ? "Obtendo localização..."
+                : "Criando..."
               : carregandoPerfil || (!dadosUsuario?.id_usuario && !erroPerfil)
                 ? "Carregando cadastro..."
                 : erroPerfil
@@ -572,6 +613,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 18,
     color: "#e5e5e5",
+  },
+
+  locationTitle: {
+    color: "#e5e5e5",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+
+  locationDescription: {
+    color: "#8a8a8a",
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 10,
   },
 
   inputWithIcon: {

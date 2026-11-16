@@ -27,7 +27,13 @@
     },
     "plugins": [
       "expo-status-bar",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permita que o EcoTrack use sua localização ao registrar um relato."
+        }
+      ]
     ]
   }
 }

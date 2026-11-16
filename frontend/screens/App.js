@@ -27,6 +27,7 @@ export default function App() {
   const [carregandoPerfil, setCarregandoPerfil] = useState(false);
   const [erroPerfil, setErroPerfil] = useState("");
   const [tentativaPerfil, setTentativaPerfil] = useState(0);
+  const [versaoRelatos, setVersaoRelatos] = useState(0);
 
   useEffect(() => observePushNotification(() => setScreen("Notificacoes")), []);
 
@@ -146,6 +147,7 @@ export default function App() {
       {screen === "CriarRelato" && (
         <CriarRelato
           setScreen={setScreen}
+          onRelatoCriado={() => setVersaoRelatos((versao) => versao + 1)}
           usuario={usuario}
           dadosUsuario={dadosUsuario}
           carregandoPerfil={carregandoPerfil}
@@ -168,6 +170,7 @@ export default function App() {
           carregandoPerfil={carregandoPerfil}
           erroPerfil={erroPerfil}
           onRetry={recarregarPerfil}
+          versaoRelatos={versaoRelatos}
         />
       )}
 
