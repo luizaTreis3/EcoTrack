@@ -20,6 +20,39 @@ const imageExtensions = {
     "image/heif": "heif"
 };
 
+function parseReportCoordinates(latitudeValue, longitudeValue) {
+    const latitudeInformada = latitudeValue !== undefined
+        && latitudeValue !== null
+        && String(latitudeValue).trim() !== "";
+    const longitudeInformada = longitudeValue !== undefined
+        && longitudeValue !== null
+        && String(longitudeValue).trim() !== "";
+
+    if (!latitudeInformada && !longitudeInformada) {
+        return { latitude: null, longitude: null };
+    }
+
+    if (!latitudeInformada || !longitudeInformada) {
+        return { erro: "Informe latitude e longitude juntas." };
+    }
+
+    const latitude = Number(String(latitudeValue).replace(",", "."));
+    const longitude = Number(String(longitudeValue).replace(",", "."));
+
+    if (
+        !Number.isFinite(latitude)
+        || !Number.isFinite(longitude)
+        || latitude < -90
+        || latitude > 90
+        || longitude < -180
+        || longitude > 180
+    ) {
+        return { erro: "As coordenadas informadas são inválidas." };
+    }
+
+    return { latitude, longitude };
+}
+
 function queryAsync(sql, valores = []) {
     return new Promise((resolve, reject) => {
         db.query(sql, valores, (err, results) => {
@@ -713,6 +746,8 @@ app.get("/usuarios/:id/relatos", (req, res) => {
             titulo,
             bairro,
             endereco,
+            latitude,
+            longitude,
             categoria,
             descricao,
             imagem,
@@ -1238,6 +1273,7 @@ app.get("/pontos-coleta", (req, res) => {
             p.descricao,
             p.horario_funcionamento,
             p.telefone,
+            p.email,
             ${acompanhamento}
         FROM pontos_coleta p
         ORDER BY p.nome
@@ -1273,7 +1309,8 @@ app.get("/pontos-coleta/:id", (req, res) => {
             tipo_residuo,
             descricao,
             horario_funcionamento,
-            telefone
+            telefone,
+            email
         FROM pontos_coleta
         WHERE id_ponto = ?
     `;
@@ -1355,7 +1392,8 @@ app.post("/pontos-coleta", (req, res) => {
         tipo_residuo,
         descricao,
         horario_funcionamento,
-        telefone
+        telefone,
+        email
     } = req.body;
 
     if (!nome || !endereco || !tipo_residuo) {
@@ -1375,9 +1413,10 @@ app.post("/pontos-coleta", (req, res) => {
             tipo_residuo,
             descricao,
             horario_funcionamento,
-            telefone
+            telefone,
+            email
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const valores = [
@@ -1389,7 +1428,8 @@ app.post("/pontos-coleta", (req, res) => {
         tipo_residuo,
         descricao,
         horario_funcionamento,
-        telefone
+        telefone,
+        email
     ];
 
     db.query(sql, valores, (err, result) => {
@@ -1421,7 +1461,8 @@ app.put("/pontos-coleta/:id", (req, res) => {
         tipo_residuo,
         descricao,
         horario_funcionamento,
-        telefone
+        telefone,
+        email
     } = req.body;
 
     if (!nome || !endereco || !tipo_residuo) {
@@ -1441,7 +1482,8 @@ app.put("/pontos-coleta/:id", (req, res) => {
             tipo_residuo = ?,
             descricao = ?,
             horario_funcionamento = ?,
-            telefone = ?
+            telefone = ?,
+            email = ?
         WHERE id_ponto = ?
     `;
 
@@ -1455,6 +1497,7 @@ app.put("/pontos-coleta/:id", (req, res) => {
         descricao,
         horario_funcionamento,
         telefone,
+        email,
         id
     ];
 
@@ -1669,6 +1712,8 @@ app.get("/relatos", (req, res) => {
             titulo,
             bairro,
             endereco,
+            latitude,
+            longitude,
             categoria,
             descricao,
             imagem,
@@ -1722,6 +1767,8 @@ app.get("/relatos/:id", (req, res) => {
             titulo,
             bairro,
             endereco,
+            latitude,
+            longitude,
             categoria,
             descricao,
             imagem,
@@ -1779,7 +1826,9 @@ app.post("/relatos", receiveImage, (req, res) => {
         categoria,
         descricao,
         imagem,
-        atualizar_status
+        atualizar_status,
+        latitude,
+        longitude
     } = req.body;
 
     // Verifica o ID do usuário
@@ -1796,6 +1845,13 @@ app.post("/relatos", receiveImage, (req, res) => {
         }));
     }
 
+    const coordenadas = parseReportCoordinates(latitude, longitude);
+    if (coordenadas.erro) {
+        return removeUploadedFile(req.file, () => res.status(400).json({
+            mensagem: coordenadas.erro
+        }));
+    }
+
     const imagemRelato = req.file
         ? `/uploads/${req.file.filename}`
         : imagem || null;
@@ -1807,13 +1863,15 @@ app.post("/relatos", receiveImage, (req, res) => {
             titulo,
             bairro,
             endereco,
+            latitude,
+            longitude,
             categoria,
             descricao,
             imagem,
             atualizar_status,
             status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')
     `;
 
     const valores = [
@@ -1821,6 +1879,8 @@ app.post("/relatos", receiveImage, (req, res) => {
         titulo,
         bairro,
         endereco,
+        coordenadas.latitude,
+        coordenadas.longitude,
         categoria,
         descricao,
         imagemRelato,
@@ -1863,12 +1923,21 @@ app.put("/relatos/:id", (req, res) => {
         categoria,
         descricao,
         imagem,
-        atualizar_status
+        atualizar_status,
+        latitude,
+        longitude
     } = req.body;
 
     if (!titulo || !bairro || !endereco || !categoria || !descricao) {
         return res.status(400).json({
             mensagem: "Preencha os campos obrigatórios: título, bairro, endereço, categoria e descrição."
+        });
+    }
+
+    const coordenadas = parseReportCoordinates(latitude, longitude);
+    if (coordenadas.erro) {
+        return res.status(400).json({
+            mensagem: coordenadas.erro
         });
     }
 
@@ -1878,6 +1947,8 @@ app.put("/relatos/:id", (req, res) => {
             titulo = ?,
             bairro = ?,
             endereco = ?,
+            latitude = COALESCE(?, latitude),
+            longitude = COALESCE(?, longitude),
             categoria = ?,
             descricao = ?,
             imagem = ?,
@@ -1889,6 +1960,8 @@ app.put("/relatos/:id", (req, res) => {
         titulo,
         bairro,
         endereco,
+        coordenadas.latitude,
+        coordenadas.longitude,
         categoria,
         descricao,
         imagem || null,

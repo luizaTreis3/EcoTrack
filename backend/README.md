@@ -17,14 +17,44 @@ Ecopontos acompanhados. Não é necessário executar separadamente a migração
 `004_report_notification_rules.sql`; ela contém apenas uma parte das regras
 recriadas pela migração `005`.
 
-Na tela Infos, o usuário informa o bairro da residência e vê os dias, turnos e
-cooperativas que atendem a região conforme esse cronograma. O backend gera no
-dia da coleta um lembrete para o turno correspondente (07h–12h ou 13h–18h),
-uma vez por rota e por dia, se `deseja_notificacoes` estiver ativado.
+Na tela Infos, o usuário informa o bairro e toca em **Acompanhar** para ver os
+dias, turnos e cooperativas da rota e receber lembretes. **Parar** remove o
+bairro acompanhado. O backend gera no dia da coleta um lembrete no turno
+correspondente (07h–12h ou 13h–18h), uma vez por rota e por dia, desde que
+`deseja_notificacoes` esteja ativado no perfil. O botão também permite
+atualizar o bairro acompanhado.
 
 O cronograma identifica a rota por bairro; os dados atuais não têm coordenadas
-da residência nem dos Ecopontos para calcular distância geográfica até o ponto
-mais próximo. Os Ecopontos continuam listados separadamente.
+da residência para calcular distância geográfica até o ponto mais próximo. Na
+tela Infos, o mapa exibe os Ecopontos com latitude e longitude cadastradas.
+
+### Atualização dos Ecopontos de São Leopoldo
+
+Faça backup do banco. Execute uma única vez
+[006_update_sao_leopoldo_ecopoints.sql](./migrations/006_update_sao_leopoldo_ecopoints.sql)
+para atualizar os contatos e endereços oficiais, e depois
+[007_add_sao_leopoldo_ecopoint_coordinates.sql](./migrations/007_add_sao_leopoldo_ecopoint_coordinates.sql)
+para adicionar as coordenadas geocodificadas. Em seguida, execute
+[008_update_sao_leopoldo_ecopoint_materials.sql](./migrations/008_update_sao_leopoldo_ecopoint_materials.sql)
+para atualizar os resíduos aceitos e permitir a filtragem por categoria. Se a
+migração `006` já foi aplicada, execute apenas `007` e `008`. Os pinos
+representam os endereços geocodificados pelo [ArcGIS World Geocoding
+Service](https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer);
+confirme os detalhes da localização ao planejar uma visita.
+
+### Mapa dos relatos
+
+Faça backup do banco e execute uma única vez
+[009_add_report_coordinates.sql](./migrations/009_add_report_coordinates.sql)
+antes de iniciar a versão atualizada do backend. A migração adiciona latitude e
+longitude opcionais à tabela `relatos`, preservando os registros existentes.
+Ao enviar um relato, o aplicativo solicita permissão de localização em primeiro
+plano e grava as coordenadas atuais do aparelho; por isso, o usuário deve estar
+no local indicado no endereço. Na Web, o navegador também precisa conceder a
+permissão de localização. A página Home exibe os relatos do próprio usuário e
+usa vermelho para `Pendente`, azul para `Em análise` e verde para `Resolvido`.
+Relatos antigos sem coordenadas continuam acessíveis na lista, mas não aparecem
+no mapa.
 
 ### Aprovação de reciclagens e desafio
 
@@ -96,9 +126,10 @@ que o envio funcione, o backend precisa ter acesso HTTPS a
 
 Os endereços e horários dos Ecopontos vieram da página oficial de
 [Serviços Urbanos da Prefeitura de São Leopoldo](https://www.saoleopoldo.rs.gov.br/conteudo/1722/1?titulo=SERVI%C3%87OS+URBANOS).
-Eles recebem pneus, móveis, poda/jardinagem e entulho, não recicláveis domésticos
-comuns. O cronograma por bairro cadastrado na migração foi fornecido pelo
-usuário e não foi verificado independentemente com a Prefeitura. A página
+As categorias de resíduos aceitos foram informadas pelo usuário; o Ecoponto
+Duque de Caxias também recebe materiais recicláveis e pequenos volumes de
+resíduos domésticos. O cronograma por bairro cadastrado na migração foi
+fornecido pelo usuário e não foi verificado independentemente com a Prefeitura. A página
 municipal de [Coleta Seletiva](https://www.saoleopoldo.rs.gov.br/conteudo/4303/1/1722?titulo=COLETA+SELETIVA)
 deve ser consultada para confirmar eventuais alterações.
 
