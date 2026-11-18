@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 import {
   launchImageLibraryAsync,
+  launchCameraAsync,
+  requestCameraPermissionsAsync,
   requestMediaLibraryPermissionsAsync,
 } from "expo-image-picker";
 import { API_URL } from "./api";
@@ -37,6 +39,42 @@ export async function pickImageFromLibrary() {
   const asset = result.assets?.[0];
   if (!asset?.uri) {
     throw new Error("Não foi possível ler a imagem selecionada.");
+  }
+
+  const contentType = asset.mimeType || "image/jpeg";
+  if (!ALLOWED_IMAGE_TYPES.has(contentType.toLowerCase())) {
+    throw new Error("Use uma imagem JPEG, PNG, WebP, HEIC ou GIF.");
+  }
+
+  if (asset.fileSize > MAX_IMAGE_SIZE_BYTES) {
+    throw new Error("A imagem deve ter no máximo 5 MB.");
+  }
+
+  return asset;
+}
+
+export async function takePhotoForReport() {
+  const permission = await requestCameraPermissionsAsync();
+
+  if (!permission.granted) {
+    throw new Error("Permita o acesso à câmera para tirar uma foto do relato.");
+  }
+
+  const result = await launchCameraAsync({
+    mediaTypes: ["images"],
+    allowsEditing: true,
+    quality: 0.8,
+    maxWidth: 1600,
+    maxHeight: 1600,
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  const asset = result.assets?.[0];
+  if (!asset?.uri) {
+    throw new Error("Não foi possível obter a foto tirada.");
   }
 
   const contentType = asset.mimeType || "image/jpeg";

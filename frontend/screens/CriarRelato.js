@@ -17,6 +17,7 @@ import {
   appendImageToFormData,
   pickImageFromLibrary,
   sendFormData,
+  takePhotoForReport,
 } from "../src/services/imageStorage";
 
 export default function CriarRelato({
@@ -80,6 +81,42 @@ export default function CriarRelato({
         error.message || "Verifique a permissão da galeria e tente novamente."
       );
     }
+  }
+
+  async function tirarFotoRelato() {
+    try {
+      const asset = await takePhotoForReport();
+      if (asset) {
+        setImagemRelato(asset);
+      }
+    } catch (error) {
+      console.error("Erro ao tirar foto do relato:", error);
+      Alert.alert(
+        "Não foi possível tirar a foto",
+        error.message || "Verifique a permissão da câmera e tente novamente."
+      );
+    }
+  }
+
+  function selecionarImagemDoRelato() {
+    Alert.alert(
+      "Foto do relato",
+      "Escolha como deseja adicionar a imagem.",
+      [
+        {
+          text: "Tirar foto",
+          onPress: tirarFotoRelato,
+        },
+        {
+          text: "Escolher da galeria",
+          onPress: selecionarImagemRelato,
+        },
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+      ]
+    );
   }
 
   async function handleCriarRelato() {
@@ -323,7 +360,7 @@ export default function CriarRelato({
 
           <Pressable
             style={styles.uploadBox}
-            onPress={selecionarImagemRelato}
+            onPress={selecionarImagemDoRelato}
             disabled={carregando}
             accessibilityRole="button"
             accessibilityLabel={imagemRelato ? "Alterar imagem do relato" : "Adicionar imagem ao relato"}

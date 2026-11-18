@@ -29,6 +29,14 @@
       "expo-status-bar",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o EcoTrack acesse suas fotos para anexar uma imagem ao relato.",
+          "cameraPermission": "Permita que o EcoTrack use a câmera para tirar uma foto do relato.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-location",
         {
           "locationWhenInUsePermission": "Permita que o EcoTrack use sua localização ao registrar um relato."
