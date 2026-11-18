@@ -1,0 +1,253 @@
+ECOTRACK - PASSO A PASSO PARA UTILIZAR APLICACAO
+
+1. REQUISITOS
+
+- Windows 10 ou superior
+- Node.js 18 ou superior
+- npm
+- MySQL 8 ou MariaDB
+- Um projeto Firebase configurado para autenticacao por email e senha
+- Expo Go para testes rapidos no celular, ou um development build para a versao nativa
+
+Observacao:
+As funcionalidades de notificacoes push remotas exigem um projeto EAS e um
+development build. O historico interno de notificacoes funciona sem EAS.
+
+
+2. BANCO DE DADOS
+
+1. Inicie o MySQL.
+2. Abra o MySQL Workbench ou outro cliente.
+3. Execute o arquivo:
+
+   ecotrack_database.sql
+
+   Ele cria o banco ecotrack, as tabelas, o cronograma da coleta seletiva,
+   as tabelas de reciclagem, desafios e acompanhamento dos pontos.
+
+O script pode ser executado com o comando:
+
+mysql -u root -p < ecotrack_database.sql
+
+O projeto esta configurado para usar:
+
+- host: localhost
+- usuario: root
+- senha: vazia
+- banco: ecotrack
+
+Esses dados podem ser alterados em:
+
+backend/dbconfig.js
+
+
+3. AJUSTES NECESSARIOS PARA OS RELATOS GPS
+
+Antes de enviar relatos com coordenadas, execute no banco:
+
+ALTER TABLE relatos
+    ADD COLUMN latitude DECIMAL(10, 7) NULL AFTER endereco,
+    ADD COLUMN longitude DECIMAL(10, 7) NULL AFTER latitude;
+
+Nao execute esse comando se as colunas latitude e longitude ja existirem.
+
+
+4. FIREBASE
+
+1. Crie um projeto no Firebase Console.
+2. Ative Authentication > Sign-in method > Email/password.
+3. Configure o Firebase no frontend na tela de cadastro/login.
+4. Para alterar ou recuperar senha, mantenha o modelo de redefinicao ativo
+   em Authentication > Templates > Password reset.
+5. O email do cadastro deve coincidir com o usuario criado no Firebase.
+
+
+5. INSTALAR AS DEPENDENCIAS
+
+Backend:
+
+cd ecotrack/backend
+npm install
+
+Frontend:
+
+cd ecotrack/frontend
+npm install
+
+Nao execute o npm install na pasta raiz do ecotrack, pois o frontend ativo
+esta dentro da pasta frontend e possui suas proprias dependencias.
+
+
+6. CONFIGURAR O ENDERECO DA API
+
+Backend roda por padrao em:
+
+http://localhost:3000
+
+No arquivo frontend/src/services/api.js, o endereco HTTP pode ser informado
+pela variavel de ambiente EXPO_PUBLIC_API_URL ou no fallback de host.
+
+Exemplo para executar no celular na mesma rede:
+
+EXPO_PUBLIC_API_URL=http://IP_DO_COMPUTADOR:3000
+
+No PowerShell:
+
+$env:EXPO_PUBLIC_API_URL="http://IP_DO_COMPUTADOR:3000"
+npx expo start -c
+
+O celular e o computador devem estar na mesma rede Wi-Fi.
+
+
+7. INICIAR O BACKEND
+
+Em um terminal:
+
+cd ecotrack/backend
+npm run dev
+
+Ou:
+
+node server.js
+
+Deixe esse terminal aberto. O servidor utiliza a porta 3000.
+
+Teste no navegador:
+
+http://localhost:3000
+
+
+8. INICIAR O FRONTEND
+
+Em outro terminal:
+
+cd ecotrack/frontend
+npx expo start -c
+
+Opcoes:
+
+- Apertar w para abrir no navegador.
+- Escanear o QR Code com Expo Go no Android ou iOS.
+- Apertar a para iniciar no Android, se estiver configurado.
+- Apertar i para iniciar no iOS, se estiver em macOS.
+
+Depois de qualquer alteracao nativa ou de permissao em app.json, pare o Expo
+e gere uma nova build nativa antes de testar. Limpe o cache com:
+
+npx expo start -c
+
+
+9. COMO USAR O APLICATIVO
+
+Criar conta:
+
+1. Abra a tela Cadastro.
+2. Preencha nome, email, senha, telefone, CPF, CEP e endereco.
+3. Confirme os termos.
+4. Conclua o cadastro.
+
+Entrar:
+
+1. Abra a tela Login.
+2. Informe email e senha cadastrados.
+3. Entre na conta.
+
+Atualizar perfil:
+
+1. Acesse Meu Perfil.
+2. Atualize os dados permitidos.
+3. Salve as alteracoes.
+
+Criar um relato:
+
+1. Entre na tela Crie um relato.
+2. Preencha titulo, bairro, endereco, categoria e descricao.
+3. Toque no campo de imagem.
+4. Escolha Tirar foto ou Escolher da galeria.
+5. Toque em Criar relato.
+6. Conceda a permissao de localizacao.
+7. Esteja no local do problema, pois o marcador usa o GPS do aparelho.
+8. O relato aparece na Home como marcador vermelho enquanto estiver Pendente.
+
+Cores dos relatos:
+
+- Vermelho: Pendente
+- Azul: Em analise
+- Verde: Resolvido
+
+Registrar reciclagem:
+
+1. Acesse Registrar reciclagem.
+2. Preencha material, quantidade, data e local.
+3. Tire uma foto ou escolha o comprovante.
+4. Envie o registro.
+5. O registro fica Pendente ate a aprovacao de um administrador no banco.
+
+Acompanhar a coleta seletiva:
+
+1. Acesse Infos.
+2. Informe ou selecione o bairro.
+3. Toque em Acompanhar.
+4. Ative as notificacoes no perfil se desejar receber avisos.
+
+Usar ecopontos:
+
+1. Acesse Infos.
+2. Use o filtro por categoria de residuo.
+3. Selecione Acompanhar ponto para acompanhar um ecoponto.
+
+
+10. APROVAR UMA RECICLAGEM
+
+No banco:
+
+SELECT id_reciclagem, id_usuario, material, quantidade_kg,
+       data_reciclagem, local_reciclagem, status
+FROM reciclagens
+WHERE status = 'Pendente';
+
+UPDATE reciclagens
+SET status = 'Aprovada'
+WHERE id_reciclagem = ID_DA_RECICLAGEM
+  AND status = 'Pendente';
+
+Somente registros aprovados contam para os desafios e EcoPoints.
+
+
+11. ALTERAR UM RELATO PARA RESOLVIDO
+
+UPDATE relatos
+SET status = 'Resolvido'
+WHERE id_relato = ID_DO_RELATO;
+
+
+12. SOLUCAO DE PROBLEMAS
+
+"Unable to resolve expo-location":
+- Execute o npm install dentro da pasta frontend.
+- Confirme que expo-location esta em frontend/package.json.
+- Reinicie com npx expo start -c.
+
+"ER_BAD_FIELD_ERROR: latitude":
+- Execute o comando SQL das coordenadas de relatos informado no item 3.
+
+"ECONNREFUSED":
+- Confirme que o backend esta iniciado na porta 3000.
+- Confirme que frontend/src/services/api.js aponta para o endereco correto.
+- Em celular, use o IP da maquina e nao localhost.
+
+"Nenhum relato no mapa":
+- Conceda a permissao de localizacao.
+- Confirme que o relato foi salvo.
+- Confirme que o usuario esta autenticado.
+- Confirme que o backend possui as colunas latitude e longitude.
+
+"Foto nao enviada":
+- Confirme que app.json possui o plugin expo-image-picker.
+- Conceda permissao de galeria/camera.
+- Gere uma nova build nativa apos alterar permissoes.
+
+"Banco nao conectado":
+- Confirme que MySQL esta iniciado.
+- Confirme usuario, senha e banco em backend/dbconfig.js.
+- Confirme que o banco ecotrack foi criado.

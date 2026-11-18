@@ -1,0 +1,301 @@
+create database ecotrack;
+use ecotrack;
+
+CREATE TABLE usuarios (
+   id_usuario int NOT NULL AUTO_INCREMENT,
+   nome_completo varchar(150) NOT NULL,
+   email varchar(150) NOT NULL,
+   cep varchar(10) NOT NULL,
+   endereco varchar(255) DEFAULT NULL,
+   telefone varchar(20) NOT NULL,
+   cpf varchar(14) NOT NULL,
+   senha varchar(255) NOT NULL,
+   aceitou_termos tinyint(1) NOT NULL DEFAULT '0',
+   deseja_notificacoes tinyint(1) NOT NULL DEFAULT '0',
+   data_cadastro timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+   firebase_uid varchar(128) DEFAULT NULL,
+   `imagem_perfil` varchar(512) DEFAULT NULL,
+   `bairro_coleta` VARCHAR(100) DEFAULT NULL,
+   `eco_points` INT NOT NULL DEFAULT 0,
+   PRIMARY KEY (`id_usuario`),
+   UNIQUE KEY `email` (`email`),
+   UNIQUE KEY `cpf` (`cpf`),
+   UNIQUE KEY `firebase_uid` (`firebase_uid`)
+);
+
+CREATE TABLE pontos_coleta (
+   id_ponto int NOT NULL AUTO_INCREMENT,
+   nome varchar(150) NOT NULL,
+   endereco varchar(255) NOT NULL,
+   cep varchar(10) DEFAULT NULL,
+   latitude decimal(10,8) DEFAULT NULL,
+   longitude decimal(11,8) DEFAULT NULL,
+   tipo_residuo varchar(255) NOT NULL,
+   descricao text,
+   horario_funcionamento varchar(100) DEFAULT NULL,
+   telefone varchar(20) DEFAULT NULL,
+   email varchar(150) DEFAULT NULL,
+   PRIMARY KEY (`id_ponto`)
+);
+
+CREATE TABLE relatos (
+   id_relato int NOT NULL AUTO_INCREMENT,
+   id_usuario int NOT NULL,
+   titulo varchar(150) NOT NULL,
+   bairro varchar(100) NOT NULL,
+   endereco varchar(255) NOT NULL,
+   categoria varchar(100) NOT NULL,
+   descricao text NOT NULL,
+   imagem varchar(255) DEFAULT NULL,
+   atualizar_status tinyint(1) NOT NULL DEFAULT '0',
+   data_criacao timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+   status enum('Pendente','Em análise','Resolvido') NOT NULL DEFAULT 'Pendente',
+   PRIMARY KEY (id_relato),
+   KEY fk_relatos_usuario (id_usuario)
+);
+
+CREATE TABLE notificacoes (
+   id_notificacao int NOT NULL AUTO_INCREMENT,
+   id_usuario int NOT NULL,
+   titulo varchar(150) NOT NULL,
+   mensagem text NOT NULL,
+   lida tinyint(1) NOT NULL DEFAULT '0',
+   data_notificacao timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+   PRIMARY KEY (`id_notificacao`),
+   KEY `id_usuario` (`id_usuario`)
+);
+
+CREATE TABLE IF NOT EXISTS notificacoes_push (
+    id_notificacao INT NOT NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'pendente',
+    tentativas TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    proxima_tentativa DATETIME DEFAULT NULL,
+    data_processamento DATETIME DEFAULT NULL,
+    ultimo_erro VARCHAR(500) DEFAULT NULL,
+    enviada_em DATETIME DEFAULT NULL,
+    PRIMARY KEY (id_notificacao),
+    KEY idx_notificacoes_push_pendentes (estado, proxima_tentativa)
+);
+
+CREATE TABLE IF NOT EXISTS coleta_seletiva_agenda (
+    id_agenda INT NOT NULL AUTO_INCREMENT,
+    cooperativa VARCHAR(100) NOT NULL,
+    dia_semana TINYINT UNSIGNED NOT NULL,
+    turno ENUM('Manhã', 'Tarde') NOT NULL,
+    areas_coleta TEXT NOT NULL,
+    PRIMARY KEY (id_agenda),
+    UNIQUE KEY uq_coleta_seletiva_rota (cooperativa, dia_semana, turno),
+    KEY idx_coleta_seletiva_dia_turno (dia_semana, turno)
+);
+
+INSERT INTO coleta_seletiva_agenda
+    (cooperativa, dia_semana, turno, areas_coleta)
+VALUES
+    ('UNICICLAR', 1, 'Manhã', 'Campestre, Vila Nova e Manoela'),
+    ('UNICICLAR', 1, 'Tarde', 'Campestre - Parque Recreio'),
+    ('UNICICLAR', 2, 'Manhã', 'São Cristóvão, Vila Born e Santo André'),
+    ('UNICICLAR', 2, 'Tarde', 'Rio Branco - Loteamento Rota do Sol'),
+    ('UNICICLAR', 3, 'Manhã', 'Campestre, Vila Nova e Manoela'),
+    ('UNICICLAR', 3, 'Tarde', 'Campestre - Parque Recreio'),
+    ('UNICICLAR', 4, 'Manhã', 'São Miguel - Paim e Charrua'),
+    ('UNICICLAR', 5, 'Manhã', 'São Cristóvão, Vila Born e Santo André'),
+    ('UNICICLAR', 5, 'Tarde', 'Rio Branco - Loteamento Rota do Sol'),
+    ('UNICICLAR', 6, 'Manhã', 'São Miguel - Paim e Charrua'),
+
+    ('UNIVALE', 1, 'Manhã', 'Feitoria - parte da Seller (lado oeste da Av. Integração) e Imigrante'),
+    ('UNIVALE', 1, 'Tarde', 'Bairro Independência e Duque de Caxias - Vila Duque Nova e Cohab Duque'),
+    ('UNIVALE', 2, 'Manhã', 'Santa Teresa, Vila Kennedy e Vila Duque I (trecho entre John Kennedy, Mauá, Nonoai e Santa Maria/Evilásio Antônio Vieira)'),
+    ('UNIVALE', 3, 'Manhã', 'Feitoria - parte da Madezatti (lado oeste da Av. Integração) e São Geraldo'),
+    ('UNIVALE', 3, 'Tarde', 'Feitoria - parte da Seller (lado oeste da Av. Integração) e Duque de Caxias - Vila Duque Nova e Cohab Duque'),
+    ('UNIVALE', 4, 'Manhã', 'Santa Teresa, Vila Kennedy e Vila Duque I (trecho entre John Kennedy, Mauá, Nonoai e Santa Maria/Evilásio Antônio Vieira)'),
+    ('UNIVALE', 5, 'Manhã', 'Feitoria - parte da Madezatti (lado oeste da Av. Integração) e São Geraldo'),
+    ('UNIVALE', 5, 'Tarde', 'Feitoria - Imigrante e Bairro Independência'),
+
+    ('MÃOS DADAS', 1, 'Manhã', 'Rio dos Sinos - Mauá, BR-116, Adão Hoeftel, Atalíbio de Rezende e Bom Fim'),
+    ('MÃOS DADAS', 1, 'Tarde', 'Feitoria - Jardim das Acácias e Jardim Cora'),
+    ('MÃOS DADAS', 2, 'Manhã', 'Vila Brás - Padre Orestes, Chácara dos Leões, Progresso e Steigleder'),
+    ('MÃOS DADAS', 2, 'Tarde', 'Fazenda São Borja, Monte Blanco e São Borja - Barreira'),
+    ('MÃOS DADAS', 3, 'Manhã', 'São José e Pinheiros'),
+    ('MÃOS DADAS', 4, 'Manhã', 'Vila Brás - Padre Orestes, Chácara dos Leões, Progresso e Steigleder'),
+    ('MÃOS DADAS', 4, 'Tarde', 'Fazenda São Borja, Monte Blanco e São Borja - Barreira'),
+    ('MÃOS DADAS', 5, 'Manhã', 'Rio dos Sinos - Mauá, BR-116, Adão Hoeftel, Atalíbio de Rezende e Bom Fim'),
+    ('MÃOS DADAS', 5, 'Tarde', 'Feitoria - Jardim das Acácias e Jardim Cora'),
+    ('MÃOS DADAS', 6, 'Manhã', 'São José e Pinheiros'),
+
+    ('SANTO ANTÔNIO', 1, 'Manhã', 'Centro'),
+    ('SANTO ANTÔNIO', 1, 'Tarde', 'Centro'),
+    ('SANTO ANTÔNIO', 2, 'Manhã', 'Centro'),
+    ('SANTO ANTÔNIO', 2, 'Tarde', 'Centro'),
+    ('SANTO ANTÔNIO', 3, 'Manhã', 'Centro'),
+    ('SANTO ANTÔNIO', 3, 'Tarde', 'Centro'),
+    ('SANTO ANTÔNIO', 4, 'Manhã', 'Centro'),
+    ('SANTO ANTÔNIO', 4, 'Tarde', 'Centro'),
+    ('SANTO ANTÔNIO', 5, 'Manhã', 'Centro'),
+    ('SANTO ANTÔNIO', 5, 'Tarde', 'Centro'),
+    ('SANTO ANTÔNIO', 6, 'Manhã', 'Centro'),
+    ('SANTO ANTÔNIO', 6, 'Tarde', 'Centro'),
+
+    ('NOVA CONQUISTA', 1, 'Manhã', 'Scharlau Alta e Jardim Viaduto'),
+    ('NOVA CONQUISTA', 1, 'Tarde', 'Scharlau - Parque Sinuelo e Vila Glória'),
+    ('NOVA CONQUISTA', 2, 'Manhã', 'Scharlau - Itapema, Vila União, Cooperativa União, Panorama e Loteamento Santo Augusto'),
+    ('NOVA CONQUISTA', 2, 'Tarde', 'Arroio da Manteiga, Jardim Luciana, Novo Jardim Luciana e Boa Vista - Loteamento Colina'),
+    ('NOVA CONQUISTA', 3, 'Tarde', 'Arroio da Manteiga - Santa Marta e Tancredo Neves'),
+    ('NOVA CONQUISTA', 4, 'Manhã', 'Scharlau - Itapema, Vila União, Cooperativa União, Panorama e Loteamento Santo Augusto'),
+    ('NOVA CONQUISTA', 4, 'Tarde', 'Arroio da Manteiga, Jardim Luciana, Novo Jardim Luciana e Boa Vista - Loteamento Colina'),
+    ('NOVA CONQUISTA', 5, 'Manhã', 'Scharlau Alta e Jardim Viaduto'),
+    ('NOVA CONQUISTA', 5, 'Tarde', 'Scharlau - Parque Sinuelo e Vila Glória'),
+
+    ('VITÓRIA', 1, 'Manhã', 'Morro do Espelho e Fião'),
+    ('VITÓRIA', 2, 'Manhã', 'Fião e Vicentina'),
+    ('VITÓRIA', 2, 'Tarde', 'Vicentina e São João Batista - Vila Otacílio'),
+    ('VITÓRIA', 3, 'Manhã', 'Fião, Padre Réus e Duque de Caxias - Labirinto e Duque Velha'),
+    ('VITÓRIA', 3, 'Tarde', 'Cristo Rei'),
+    ('VITÓRIA', 4, 'Manhã', 'Fião e Vicentina'),
+    ('VITÓRIA', 4, 'Tarde', 'Vicentina e São João Batista - Vila Otacílio'),
+    ('VITÓRIA', 5, 'Manhã', 'Fião, Padre Réus e Duque de Caxias - Labirinto e Duque Velha'),
+    ('VITÓRIA', 5, 'Tarde', 'Cristo Rei'),
+    ('VITÓRIA', 6, 'Manhã', 'Morro do Espelho e Fião'),
+
+    ('FEITORIA', 1, 'Manhã', 'Feitoria - Madezatti'),
+    ('FEITORIA', 1, 'Tarde', 'Feitoria - Seller'),
+    ('FEITORIA', 2, 'Manhã', 'Jardim América'),
+    ('FEITORIA', 2, 'Tarde', 'Rio Branco'),
+    ('FEITORIA', 3, 'Manhã', 'Feitoria - Seller'),
+    ('FEITORIA', 3, 'Tarde', 'Feitoria - Cohab'),
+    ('FEITORIA', 4, 'Manhã', 'Jardim América'),
+    ('FEITORIA', 4, 'Tarde', 'Rio Branco'),
+    ('FEITORIA', 5, 'Manhã', 'Feitoria - Madezatti'),
+    ('FEITORIA', 5, 'Tarde', 'Feitoria - Cohab e Seller'),
+
+    ('FÊNIX', 1, 'Manhã', 'Campina - lado esquerdo (lado da UPA) até Henrique Bier e Vila Brasília'),
+    ('FÊNIX', 1, 'Tarde', 'Campina - lado direito e Antônio Leite'),
+    ('FÊNIX', 2, 'Manhã', 'Campina - Vila Baum; Scharlau - Santa Helena; Arroio da Manteiga - Parque Campestre e Vila Verde'),
+    ('FÊNIX', 2, 'Tarde', 'Campina - Vila Elsa e Vila Berger; Arroio da Manteiga - Parque Mauá'),
+    ('FÊNIX', 4, 'Manhã', 'Campina - Santo Antônio e Fênix'),
+    ('FÊNIX', 4, 'Tarde', 'Campina - Vila Baum; Scharlau - Santa Helena; Arroio da Manteiga - Parque Campestre e Vila Verde'),
+    ('FÊNIX', 5, 'Manhã', 'Campina - lado esquerdo (lado da UPA) até Henrique Bier e Vila Brasília'),
+    ('FÊNIX', 5, 'Tarde', 'Campina - lado direito e Antônio Leite'),
+    ('FÊNIX', 6, 'Manhã', 'Campina - Vila Elsa, Vila Berger, Santo Antônio e Fênix; Arroio da Manteiga - Parque Mauá')
+ON DUPLICATE KEY UPDATE areas_coleta = VALUES(areas_coleta);
+
+CREATE TABLE IF NOT EXISTS coleta_seletiva_lembretes (
+    id_usuario INT NOT NULL,
+    id_agenda INT NOT NULL,
+    data_coleta DATE NOT NULL,
+    PRIMARY KEY (id_usuario, id_agenda, data_coleta),
+    CONSTRAINT fk_lembrete_coleta_usuario
+        FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_lembrete_coleta_agenda
+        FOREIGN KEY (id_agenda) REFERENCES coleta_seletiva_agenda (id_agenda)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reciclagens (
+    id_reciclagem INT NOT NULL AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    material VARCHAR(50) NOT NULL,
+    quantidade_kg DECIMAL(8,2) NOT NULL,
+    data_reciclagem DATE NOT NULL,
+    local_reciclagem VARCHAR(255) NOT NULL,
+    comprovante VARCHAR(255) NOT NULL,
+    status ENUM('Pendente', 'Aprovada', 'Rejeitada') NOT NULL DEFAULT 'Pendente',
+    data_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_reciclagem),
+    KEY idx_reciclagens_usuario_status (id_usuario, status),
+    CONSTRAINT fk_reciclagens_usuario
+        FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS desafios (
+    id_desafio INT NOT NULL AUTO_INCREMENT,
+    codigo VARCHAR(50) NOT NULL,
+    titulo VARCHAR(150) NOT NULL,
+    descricao VARCHAR(255) NOT NULL,
+    meta INT UNSIGNED NOT NULL,
+    recompensa INT UNSIGNED NOT NULL,
+    PRIMARY KEY (id_desafio),
+    UNIQUE KEY uq_desafios_codigo (codigo)
+);
+
+INSERT INTO desafios (codigo, titulo, descricao, meta, recompensa)
+VALUES (
+    'recicle-5-itens',
+    'Recicle 5 itens',
+    'Tenha 5 registros de reciclagem aprovados.',
+    5,
+    50
+)
+ON DUPLICATE KEY UPDATE
+    titulo = VALUES(titulo),
+    descricao = VALUES(descricao),
+    meta = VALUES(meta),
+    recompensa = VALUES(recompensa);
+
+CREATE TABLE IF NOT EXISTS usuarios_desafios (
+    id_usuario INT NOT NULL,
+    id_desafio INT NOT NULL,
+    progresso INT UNSIGNED NOT NULL DEFAULT 0,
+    data_conclusao DATETIME DEFAULT NULL,
+    PRIMARY KEY (id_usuario, id_desafio),
+    CONSTRAINT fk_usuarios_desafios_usuario
+        FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_usuarios_desafios_desafio
+        FOREIGN KEY (id_desafio) REFERENCES desafios (id_desafio)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS reciclagens_contabilizadas (
+    id_reciclagem INT NOT NULL,
+    id_usuario INT NOT NULL,
+    data_aprovacao DATETIME NOT NULL,
+    PRIMARY KEY (id_reciclagem),
+    CONSTRAINT fk_reciclagens_contabilizadas_reciclagem
+        FOREIGN KEY (id_reciclagem) REFERENCES reciclagens (id_reciclagem)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_reciclagens_contabilizadas_usuario
+        FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS notificacoes_push (
+    id_notificacao INT NOT NULL,
+    estado VARCHAR(20) NOT NULL DEFAULT 'pendente',
+    tentativas TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    proxima_tentativa DATETIME DEFAULT NULL,
+    data_processamento DATETIME DEFAULT NULL,
+    ultimo_erro VARCHAR(500) DEFAULT NULL,
+    enviada_em DATETIME DEFAULT NULL,
+    PRIMARY KEY (id_notificacao),
+    KEY idx_notificacoes_push_pendentes (estado, proxima_tentativa)
+);
+
+CREATE TABLE IF NOT EXISTS expo_push_tokens (
+    id_token INT NOT NULL AUTO_INCREMENT,
+    id_usuario INT NOT NULL,
+    expo_push_token VARCHAR(255) NOT NULL,
+    plataforma ENUM('ios', 'android') NOT NULL,
+    ativo TINYINT(1) NOT NULL DEFAULT 1,
+    data_registro TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_token),
+    UNIQUE KEY uq_expo_push_token (expo_push_token),
+    KEY idx_expo_push_usuario_ativo (id_usuario, ativo),
+    CONSTRAINT fk_expo_push_tokens_usuario
+        FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS usuarios_pontos_coleta (
+    id_usuario INT NOT NULL,
+    id_ponto INT NOT NULL,
+    data_acompanhamento TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_usuario, id_ponto),
+    CONSTRAINT fk_usuario_ponto_usuario
+        FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_usuario_ponto_ponto
+        FOREIGN KEY (id_ponto) REFERENCES pontos_coleta (id_ponto)
+        ON DELETE CASCADE
+);
