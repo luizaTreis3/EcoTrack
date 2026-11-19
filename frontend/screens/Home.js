@@ -652,12 +652,14 @@ export default function Home({
       <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 120 }}>
       {/* Header */}
       <View style={styles.header}>
-        <Image
-          source={require("../assets/image/logoEcoTrackPreto.png")}
-          style={styles.logoImage}
-          resizeMode="contain"
-          accessibilityLabel="EcoTrack"
-        />
+        <View style={styles.logoGlow}>
+          <Image
+            source={require("../assets/image/logoEcoTrackPreto.png")}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="EcoTrack"
+          />
+        </View>
         <Pressable onPress={() => setMenuOpen((prev) => !prev)} hitSlop={12} style={styles.menuButton}>
           <Ionicons name="menu" size={26} color="#22c55e" />
         </Pressable>
@@ -1037,6 +1039,16 @@ const styles = StyleSheet.create({
     width: 140,
     height: 42,
     borderRadius: 8,
+  },
+
+  logoGlow: {
+    width: 140,
+    height: 42,
+    shadowColor: "#22c55e",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.75,
+    shadowRadius: 12,
+    elevation: 8,
   },
 
   section: {
